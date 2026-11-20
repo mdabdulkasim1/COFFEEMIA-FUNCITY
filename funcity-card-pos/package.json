@@ -1,7 +1,7 @@
 {
-  "name": "funcity-rfid-pos",
+  "name": "funcity-card-pos",
   "version": "1.0.0",
-  "description": "RFID prepaid play-card POS for the Fun City kids play zone: card counter, machine stations, reports.",
+  "description": "Barcode play-card POS for the Fun City kids play zone: card counter, machine stations, reports. Works with RFID readers too.",
   "private": true,
   "type": "module",
   "engines": { "node": ">=22.5" },

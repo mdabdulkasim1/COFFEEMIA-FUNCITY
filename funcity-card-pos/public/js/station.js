@@ -1,5 +1,5 @@
 // Station screen: one per machine (tablet / small PC with a USB RFID reader).
-// URL: /station?machine=C1   add &auto=1 to start 1 minute (or 1 game) straight away on tap, without buttons.
+// URL: /station?machine=C1   add &auto=1 to start 1 minute (or 1 game) straight away on scan, without buttons.
 import { $, $$, esc, api, mmss, beep, toast } from './common.js';
 import { attachScanner } from './scan.js';
 
@@ -68,7 +68,7 @@ async function start(uid, minutes) {
   try {
     const r = await api('POST', '/api/play', { uid, machine: CODE, minutes });
     beep('start'); clearTimeout(chooseTimer);
-    setMode(machine.mode === 'game' ? 'go' : 'running', { play: r.play, card: r.card, msg: r.extended ? `+${minutes} min added · ${r.charged} credits` : `${r.charged} credits taken · balance ${r.balance}` });
+    setMode(machine.mode === 'game' ? 'go' : 'running', { play: r.play, card: r.card, msg: r.extended ? `+${minutes} min added · ${r.charged} points` : `${r.charged} points taken · balance ${r.balance}` });
     if (machine.mode === 'game') setTimeout(() => { if (st.mode === 'go') setMode('idle'); }, 6000);
   } catch (e) { fail(e.message); }
 }
@@ -88,31 +88,31 @@ function render() {
   const rem = remaining();
   if (st.mode === 'running' && rem <= 0) return finish();
   const isGame = machine.mode === 'game';
-  const head = `<div class="st-top"><div><span class="code">${esc(machine.code)}</span> &nbsp; <span class="name">${esc(machine.name)}</span></div><div class="muted small" style="color:#fff;opacity:.6">${esc(settings.brand || '')} · ${isGame ? `${machine.price_game} credits per game` : `${machine.price_1} · ${machine.price_2} · ${machine.price_3} credits`}</div></div>`;
-  const foot = `<div class="st-foot"><span>Prepaid card only · credits are taken when the timer starts</span><span>${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>`;
+  const head = `<div class="st-top"><div><span class="code">${esc(machine.code)}</span> &nbsp; <span class="name">${esc(machine.name)}</span></div><div class="muted small" style="color:#fff;opacity:.6">${esc(settings.brand || '')} · ${isGame ? `${machine.price_game} points per game` : `${machine.price_1} · ${machine.price_2} · ${machine.price_3} points`}</div></div>`;
+  const foot = `<div class="st-foot"><span>Prepaid card only · points are taken when the timer starts</span><span>${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>`;
   let body = '';
   if (st.mode === 'idle') {
-    body = `<div class="headline">Tap your card to play</div>
+    body = `<div class="headline">Scan your card to play</div>
       <div class="lcd"><div><div class="l">BALANCE</div><div class="v">--</div></div><div class="r"><div class="l">TIME LEFT</div><div class="v">--:--</div></div></div>
-      ${isGame ? `<div class="tap pulse">📶 Tap card here · ${machine.price_game} credits per game</div>` : `<div class="mins">${minsButtons(true)}</div><div class="tap pulse">📶 Tap card here</div>`}
+      ${isGame ? `<div class="scan pulse">📶 Scan card here · ${machine.price_game} points per game</div>` : `<div class="mins">${minsButtons(true)}</div><div class="scan pulse">📶 Scan card here</div>`}
       <div class="msg ${st.msg ? 'err' : ''}">${esc(st.msg)}</div>`;
   } else if (st.mode === 'choose') {
     const c = st.card;
     body = `<div class="headline">${st.play && rem > 0 ? 'Add more time' : isGame ? 'Ready to play?' : 'Pick your minutes'}</div>
-      <div class="lcd"><div><div class="l">BALANCE</div><div class="v">${c.balance} <span style="font-size:1.2rem">cr</span></div></div><div class="r"><div class="l">TIME LEFT</div><div class="v">${st.play && rem > 0 ? mmss(rem) : '--:--'}</div></div></div>
-      ${isGame ? `<div class="mins"><button id="go" ${c.balance < machine.price_game ? 'disabled' : ''}>PLAY<small>${machine.price_game} credits</small></button></div>` : `<div class="mins">${minsButtons(false, c.balance)}</div>`}
-      <div class="msg">${c.balance < (isGame ? machine.price_game : machine.price_1) ? '<span class="err">Not enough credits · top up at the counter</span>' : 'Card ' + esc(c.card_no || '')}</div>`;
+      <div class="lcd"><div><div class="l">BALANCE</div><div class="v">${c.balance} <span style="font-size:1.2rem">pts</span></div></div><div class="r"><div class="l">TIME LEFT</div><div class="v">${st.play && rem > 0 ? mmss(rem) : '--:--'}</div></div></div>
+      ${isGame ? `<div class="mins"><button id="go" ${c.balance < machine.price_game ? 'disabled' : ''}>PLAY<small>${machine.price_game} points</small></button></div>` : `<div class="mins">${minsButtons(false, c.balance)}</div>`}
+      <div class="msg">${c.balance < (isGame ? machine.price_game : machine.price_1) ? '<span class="err">Not enough points · top up at the counter</span>' : 'Card ' + esc(c.card_no || '')}</div>`;
   } else if (st.mode === 'running') {
     const total = Math.max(1, st.play.minutes * 60);
     body = `<div class="headline go">Playing · enjoy!</div>
-      <div class="lcd"><div><div class="l">BALANCE</div><div class="v">${st.card?.balance ?? '--'} <span style="font-size:1.2rem">cr</span></div></div><div class="r"><div class="l">TIME LEFT</div><div class="v big">${mmss(rem)}</div></div></div>
+      <div class="lcd"><div><div class="l">BALANCE</div><div class="v">${st.card?.balance ?? '--'} <span style="font-size:1.2rem">pts</span></div></div><div class="r"><div class="l">TIME LEFT</div><div class="v big">${mmss(rem)}</div></div></div>
       <div class="progress"><i style="width:${Math.min(100, rem / total * 100)}%"></i></div>
-      <div class="tap">📶 Tap the same card again to add time</div>
-      <div class="msg ${st.msg ? (st.msg.includes('credits') ? 'ok' : 'err') : ''}">${esc(st.msg)}</div>`;
+      <div class="scan">📶 Scan the same card again to add time</div>
+      <div class="msg ${st.msg ? (st.msg.includes('points') ? 'ok' : 'err') : ''}">${esc(st.msg)}</div>`;
   } else if (st.mode === 'go') {
-    body = `<div class="headline go">GO! Have fun 🎉</div><div class="lcd"><div><div class="l">BALANCE</div><div class="v">${st.card?.balance ?? '--'} <span style="font-size:1.2rem">cr</span></div></div><div class="r"><div class="l">GAME</div><div class="v">ON</div></div></div><div class="msg ok">${esc(st.msg)}</div>`;
+    body = `<div class="headline go">GO! Have fun 🎉</div><div class="lcd"><div><div class="l">BALANCE</div><div class="v">${st.card?.balance ?? '--'} <span style="font-size:1.2rem">pts</span></div></div><div class="r"><div class="l">GAME</div><div class="v">ON</div></div></div><div class="msg ok">${esc(st.msg)}</div>`;
   } else if (st.mode === 'done') {
-    body = `<div class="headline up">⏰ Time up!</div><div class="lcd"><div><div class="l">BALANCE</div><div class="v">${st.card?.balance ?? '--'} <span style="font-size:1.2rem">cr</span></div></div><div class="r"><div class="l">TIME LEFT</div><div class="v big">00:00</div></div></div><div class="tap pulse">📶 Tap card to play again</div>`;
+    body = `<div class="headline up">⏰ Time up!</div><div class="lcd"><div><div class="l">BALANCE</div><div class="v">${st.card?.balance ?? '--'} <span style="font-size:1.2rem">pts</span></div></div><div class="r"><div class="l">TIME LEFT</div><div class="v big">00:00</div></div></div><div class="scan pulse">📶 Scan card to play again</div>`;
   }
   app.innerHTML = head + `<div class="st-main">${body}</div>` + foot;
   $$('.mins button[data-min]').forEach(b => b.onclick = () => start(st.card.uid, Number(b.dataset.min)));
@@ -120,7 +120,7 @@ function render() {
 }
 function minsButtons(disabled, balance = 0) {
   const max = Number(settings.max_minutes || 3);
-  return [1, 2, 3].filter(m => m <= max).map(m => { const p = machine[`price_${m}`]; return `<button data-min="${m}" class="${m === 3 ? 'best' : ''}" ${disabled || p == null || balance < p ? 'disabled' : ''}>${m} MIN<small>${p ?? '—'} credits</small></button>`; }).join('');
+  return [1, 2, 3].filter(m => m <= max).map(m => { const p = machine[`price_${m}`]; return `<button data-min="${m}" class="${m === 3 ? 'best' : ''}" ${disabled || p == null || balance < p ? 'disabled' : ''}>${m} MIN<small>${p ?? '—'} points</small></button>`; }).join('');
 }
 
 boot().catch(e => { app.innerHTML = `<div class="chooser"><h1>Cannot reach the POS server</h1><p>${esc(e.message)}</p></div>`; });

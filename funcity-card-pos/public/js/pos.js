@@ -65,7 +65,7 @@ function closeShiftModal() {
       $('#shSummary', el).innerHTML = `<div class="kv">
         <b>Opening cash</b><span>${money(state.shift.opening_cash)}</span>
         <b>Cash taken</b><span>${money(t.by_method?.cash)}</span><b>Card</b><span>${money(t.by_method?.card)}</span><b>Online</b><span>${money(t.by_method?.online)}</span>
-        <b>Credits sold</b><span>${t.credits_sold ?? 0}</span><b>Credits used</b><span>${t.credits_used ?? 0}</span>
+        <b>Points sold</b><span>${t.credits_sold ?? 0}</span><b>Points used</b><span>${t.credits_used ?? 0}</span>
         <b>Cards issued / returned</b><span>${t.cards_issued ?? 0} / ${t.cards_returned ?? 0}</span>
         <b>Expected cash in drawer</b><span><b>${money(expected)}</b></span></div>`;
       $('#shCash', el).value = expected.toFixed(2); $('#shCash', el).focus();
@@ -84,7 +84,11 @@ function closeShiftModal() {
 attachScanner(uid => { $('#manualUid').value = ''; lookup(uid); });
 $('#manualGo').addEventListener('click', () => lookup($('#manualUid').value));
 $('#manualUid').addEventListener('keydown', e => { if (e.key === 'Enter') lookup(e.target.value); });
-$('#tapzone').addEventListener('click', () => $('#manualUid').focus());
+$('#tapzone').addEventListener('click', e => { if (!e.target.closest('button')) $('#manualUid').focus(); });
+$('#newCardBtn').addEventListener('click', async () => {
+  try { const { codes } = await api('POST', '/api/cards/next', { count: 1 }); await lookup(codes[0]); toast(`New card number ${codes[0]} reserved`, 'ok'); }
+  catch (e) { toast(e.message, 'error'); }
+});
 
 async function lookup(uid) {
   uid = String(uid || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -107,28 +111,28 @@ function renderCardPanel() {
     const dep = Number(state.settings.card_deposit);
     p.innerHTML = `<div class="row between"><h2>${c ? 'Returned card · issue again' : 'New card'} <span class="badge new">${c ? 'returned' : 'not issued'}</span></h2><span class="mono muted">${esc(state.uid)}</span></div>
       <div class="fields" style="margin-top:8px">
-        <div class="field"><label>Card no (printed)</label><input id="fCardNo" type="text" value="${esc(c?.card_no ?? '')}" placeholder="e.g. 0042"></div>
+        <div class="field"><label>Card no (printed)</label><input id="fCardNo" type="text" value="${esc(c?.card_no ?? state.uid)}" placeholder="printed on the card"></div>
         <div class="field"><label>Child / parent name</label><input id="fName" type="text"></div>
         <div class="field"><label>Phone</label><input id="fPhone" type="tel"></div>
         <div class="field"><label>Deposit</label><input id="fDeposit" type="number" step="0.01" value="${dep}"></div>
       </div>
       <h3 style="margin-top:8px">Choose a package</h3>
       <div class="pkgs" id="pkgPick">${pkgButtons()}</div>
-      <div class="row" style="margin-top:10px"><label style="margin:0">Or custom credits</label><input id="fCredits" type="number" min="0" step="1" style="width:120px" placeholder="0"><span class="muted small">at ${money(state.settings.credit_price)} per credit</span></div>`;
+      <div class="row" style="margin-top:10px"><label style="margin:0">Or custom points</label><input id="fCredits" type="number" min="0" step="1" style="width:120px" placeholder="0"><span class="muted small">at ${money(state.settings.credit_price)} per point</span></div>`;
     wirePurchasePick(p, 'issue');
     return;
   }
   const activeHtml = state.active.length ? `<div class="banner small" style="margin-top:8px">⏱ Playing now: ${state.active.map(a => `${esc(a.machine_name)} until ${new Date(a.ends_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`).join(' · ')}</div>` : '';
   p.innerHTML = `<div class="row between"><h2>Card ${esc(c.card_no || '')} <span class="badge ${c.status}">${c.status}</span></h2><span class="mono muted">${esc(c.uid)}</span></div>
     <div class="grid cols-2" style="grid-template-columns:1fr 1fr">
-      <div class="balance"><div><div class="lbl">BALANCE</div><div class="val">${c.balance} <span style="font-size:1rem">credits</span></div></div><div class="small" style="text-align:right;opacity:.8">≈ ${money(c.balance * state.settings.credit_price)}<br>deposit ${money(c.deposit)}</div></div>
+      <div class="balance"><div><div class="lbl">BALANCE</div><div class="val">${c.balance} <span style="font-size:1rem">points</span></div></div><div class="small" style="text-align:right;opacity:.8">≈ ${money(c.balance * state.settings.credit_price)}<br>deposit ${money(c.deposit)}</div></div>
       <div class="kv"><b>Holder</b><span>${esc(c.holder_name || '—')}</span><b>Phone</b><span>${esc(c.phone || '—')}</span><b>Issued</b><span>${dt(c.issued_at)}</span><b>Last used</b><span>${dt(c.last_used_at)}</span>${c.note ? `<b>Note</b><span>${esc(c.note)}</span>` : ''}</div>
     </div>
     ${activeHtml}
     ${c.status === 'active' ? `<h3 style="margin-top:12px">Top up</h3><div class="pkgs" id="pkgPick">${pkgButtons()}</div>
-    <div class="row" style="margin-top:10px"><label style="margin:0">Or custom credits</label><input id="fCredits" type="number" min="0" step="1" style="width:120px" placeholder="0"><span class="muted small">at ${money(state.settings.credit_price)} per credit</span></div>` : ''}
+    <div class="row" style="margin-top:10px"><label style="margin:0">Or custom points</label><input id="fCredits" type="number" min="0" step="1" style="width:120px" placeholder="0"><span class="muted small">at ${money(state.settings.credit_price)} per point</span></div>` : ''}
     <div class="row" style="margin-top:14px">
-      ${c.status === 'active' ? `<button class="btn sm" id="actAdjust">± Adjust credits</button><button class="btn sm" id="actBlock">Block card</button>` : `<button class="btn sm green" id="actUnblock">Unblock card</button>`}
+      ${c.status === 'active' ? `<button class="btn sm" id="actAdjust">± Adjust points</button><button class="btn sm" id="actBlock">Block card</button>` : `<button class="btn sm green" id="actUnblock">Unblock card</button>`}
       <button class="btn sm danger" id="actReturn">Return card &amp; refund</button>
     </div>
     <h3 style="margin-top:14px">Recent activity</h3>
@@ -148,12 +152,12 @@ function wirePurchasePick(root, kind) {
     $$('.pkg', root).forEach(x => x.classList.toggle('sel', x === b));
     $('#fCredits', root).value = '';
     const p = state.packages.find(x => x.id === Number(b.dataset.pkg));
-    setCart(kind, { package_id: p.id, label: `${p.name} · ${p.credits}${p.bonus ? ` + ${p.bonus} free` : ''} credits`, credits: p.credits + p.bonus, amount: p.price });
+    setCart(kind, { package_id: p.id, label: `${p.name} · ${p.credits}${p.bonus ? ` + ${p.bonus} free` : ''} points`, credits: p.credits + p.bonus, amount: p.price });
   }));
   $('#fCredits', root).addEventListener('input', e => {
     $$('.pkg', root).forEach(x => x.classList.remove('sel'));
     const n = Math.max(0, Math.floor(Number(e.target.value) || 0));
-    if (n) setCart(kind, { credits: n, label: `${n} credits`, amount: Math.round(n * state.settings.credit_price * 100) / 100 });
+    if (n) setCart(kind, { credits: n, label: `${n} points`, amount: Math.round(n * state.settings.credit_price * 100) / 100 });
     else if (kind === 'issue') setCart('issue', null); else { state.cart = null; renderCart(); }
   });
   if (kind === 'issue') setCart('issue', null);
@@ -167,7 +171,7 @@ function setCart(kind, buy) {
 function renderCart() {
   const box = $('#cartLines');
   const c = state.cart;
-  if (!c) { box.className = 'muted'; box.textContent = state.uid ? 'Pick a package or enter credits.' : 'Tap a card to start.'; return; }
+  if (!c) { box.className = 'muted'; box.textContent = state.uid ? 'Pick a package or enter points.' : 'Scan a card to start.'; return; }
   const deposit = c.kind === 'issue' ? Number($('#fDeposit')?.value ?? state.settings.card_deposit) : 0;
   const total = (c.buy?.amount ?? 0) + deposit;
   box.className = '';
@@ -201,9 +205,9 @@ async function charge() {
     }
     beep('start');
     printReceipt({ title: c.kind === 'issue' ? 'NEW PLAY CARD' : 'TOP-UP', card: r.card, lines, total: r.total_due, method: c.method, tx: r.transaction });
-    $('#lastSale').innerHTML = `<div class="row between"><div><b>Last sale</b> · ${esc(r.card.card_no || r.card.uid)} · ${money(r.total_due)} ${c.method}<br><span class="muted small">Balance now ${r.card.balance} credits</span></div><button class="btn sm" id="reprint">Reprint</button></div>`;
+    $('#lastSale').innerHTML = `<div class="row between"><div><b>Last sale</b> · ${esc(r.card.card_no || r.card.uid)} · ${money(r.total_due)} ${c.method}<br><span class="muted small">Balance now ${r.card.balance} points</span></div><div class="row"><a class="btn sm yellow" href="/print-cards?codes=${encodeURIComponent(r.card.uid)}&no=${encodeURIComponent(r.card.card_no || '')}" target="_blank">🖨 Print card</a><button class="btn sm" id="reprint">Reprint receipt</button></div></div>`;
     $('#reprint').onclick = () => window.print();
-    toast(`Done. Balance ${r.card.balance} credits.`, 'ok');
+    toast(`Done. Balance ${r.card.balance} points.`, 'ok');
     await lookup(state.uid);
   } catch (e) { beep('error'); toast(e.message, 'error'); btn.disabled = false; }
 }
@@ -216,7 +220,7 @@ function printReceipt({ title, card, lines, total, method, tx, extra = [] }) {
     ${lines.map(([l, v]) => `<div class="ln"><span>${esc(l)}</span><span>${money(v)}</span></div>`).join('')}
     ${extra.map(([l, v]) => `<div class="ln"><span>${esc(l)}</span><span>${esc(v)}</span></div>`).join('')}<hr>
     <div class="ln tot"><span>${total < 0 ? 'REFUNDED' : 'TOTAL'}</span><span>${money(Math.abs(total))}</span></div><div class="ln"><span>Paid by</span><span>${esc(method)}</span></div><hr>
-    <div class="ln tot"><span>Balance</span><span>${card.balance} credits</span></div><div class="ln"><span>Deposit held</span><span>${money(card.deposit)}</span></div><hr>
+    <div class="ln tot"><span>Balance</span><span>${card.balance} points</span></div><div class="ln"><span>Deposit held</span><span>${money(card.deposit)}</span></div><hr>
     <div class="c">${esc(s.receipt_footer)}</div><div class="c">Thank you · ${esc(s.brand)}</div>`;
   setTimeout(() => window.print(), 50);
 }
@@ -229,8 +233,8 @@ async function withPin(fn) {
   catch (e) { if (e.status === 403) { state.pin = null; toast('Wrong PIN', 'error'); } else toast(e.message, 'error'); beep('error'); }
 }
 function adjustModal() {
-  modal(`<h3>Adjust credits</h3><p class="muted small">Use when a machine failed mid-ride or for goodwill. No money changes hands.</p>
-    <div class="field"><label>Credits (+ add / − remove)</label><input id="adjN" type="number" step="1" class="big"></div>
+  modal(`<h3>Adjust points</h3><p class="muted small">Use when a machine failed mid-ride or for goodwill. No money changes hands.</p>
+    <div class="field"><label>Points (+ add / − remove)</label><input id="adjN" type="number" step="1" class="big"></div>
     <div class="field"><label>Reason</label><input id="adjNote" type="text" placeholder="e.g. horse ride stopped early"></div>
     <div class="row end"><button class="btn ghost" data-close>Cancel</button><button class="btn primary" id="adjOk">Apply</button></div>`,
     { onOpen: (el, close) => { $('#adjN', el).focus(); $('#adjOk', el).onclick = () => withPin(async pin => {
@@ -248,8 +252,8 @@ function returnModal() {
   const refundOn = s.refund_credits_on_return === '1';
   const creditMoney = c.balance * Number(s.credit_price);
   modal(`<h3>Return card &amp; refund</h3>
-    <div class="kv"><b>Deposit back</b><span>${money(c.deposit)}</span><b>Unused credits</b><span>${c.balance} ≈ ${money(creditMoney)}</span></div>
-    <div class="check" style="margin:12px 0"><input type="checkbox" id="retRefund" ${refundOn ? 'checked' : ''}><label for="retRefund" style="margin:0">Refund unused credits too</label></div>
+    <div class="kv"><b>Deposit back</b><span>${money(c.deposit)}</span><b>Unused points</b><span>${c.balance} ≈ ${money(creditMoney)}</span></div>
+    <div class="check" style="margin:12px 0"><input type="checkbox" id="retRefund" ${refundOn ? 'checked' : ''}><label for="retRefund" style="margin:0">Refund unused points too</label></div>
     <div class="row between"><label style="margin:0">Refund by</label><div class="seg" id="retSeg"><button data-m="cash" class="active">Cash</button><button data-m="card">Card</button><button data-m="online">Online</button></div></div>
     <div class="total" style="margin-top:12px;display:flex;justify-content:space-between;font-size:1.3rem;font-weight:900"><span>Pay customer</span><span id="retTotal"></span></div>
     <div class="row end" style="margin-top:12px"><button class="btn ghost" data-close>Cancel</button><button class="btn danger" id="retOk">Return card</button></div>`,
@@ -261,8 +265,8 @@ function returnModal() {
       $('#retOk', el).onclick = () => withPin(async pin => {
         const r = await api('POST', `/api/cards/${encodeURIComponent(state.uid)}/return`, { refund_credits: $('#retRefund', el).checked, method }, pin);
         close(); beep('done'); toast(`Refund ${money(r.refund_total)} to customer`, 'ok', 6000);
-        printReceipt({ title: 'CARD RETURNED', card: { ...r.card, balance: 0 }, lines: [['Deposit refund', -r.refund_deposit], ['Unused credits refund', -r.refund_credits_money]],
-          total: -r.refund_total, method, tx: r.transaction, extra: r.credits_forfeited ? [['Credits forfeited', r.credits_forfeited]] : [] });
+        printReceipt({ title: 'CARD RETURNED', card: { ...r.card, balance: 0 }, lines: [['Deposit refund', -r.refund_deposit], ['Unused points refund', -r.refund_credits_money]],
+          total: -r.refund_total, method, tx: r.transaction, extra: r.credits_forfeited ? [['Points forfeited', r.credits_forfeited]] : [] });
         lookup(state.uid);
       });
     } });
@@ -324,21 +328,21 @@ async function runReport() {
   const methodMap = Object.fromEntries(sum.by_method.map(m => [m.method, m.total]));
   $('#reportOut').innerHTML = `
     <div class="tiles">
-      <div class="tile teal"><div class="l">Credit sales</div><div class="v">${money(t.credit_sales)}</div><div class="s">${t.credits_sold ?? 0} credits sold</div></div>
+      <div class="tile teal"><div class="l">Points sales</div><div class="v">${money(t.credit_sales)}</div><div class="s">${t.credits_sold ?? 0} points sold</div></div>
       <div class="tile"><div class="l">Deposits in / out</div><div class="v">${money(t.deposits_in)}</div><div class="s">${money(t.deposits_out)} refunded</div></div>
-      <div class="tile"><div class="l">Credit refunds</div><div class="v">${money(t.credit_refunds)}</div><div class="s">on returned cards</div></div>
+      <div class="tile"><div class="l">Points refunds</div><div class="v">${money(t.credit_refunds)}</div><div class="s">on returned cards</div></div>
       <div class="tile yellow"><div class="l">Net money in</div><div class="v">${money(t.net_cash_in)}</div><div class="s">cash ${money(methodMap.cash)} · card ${money(methodMap.card)} · online ${money(methodMap.online)}</div></div>
-      <div class="tile"><div class="l">Plays</div><div class="v">${t.plays ?? 0}</div><div class="s">${t.credits_used ?? 0} credits · ${t.minutes_played ?? 0} min</div></div>
+      <div class="tile"><div class="l">Plays</div><div class="v">${t.plays ?? 0}</div><div class="s">${t.credits_used ?? 0} points · ${t.minutes_played ?? 0} min</div></div>
       <div class="tile"><div class="l">Cards issued / returned</div><div class="v">${t.cards_issued ?? 0} / ${t.cards_returned ?? 0}</div><div class="s">${L.active_cards ?? 0} active cards overall</div></div>
-      <div class="tile ink"><div class="l">Outstanding (liability)</div><div class="v">${money(L.credits_outstanding_value)}</div><div class="s">${L.credits_outstanding ?? 0} unused credits · deposits held ${money(L.deposits_held)}</div></div>
+      <div class="tile ink"><div class="l">Outstanding (liability)</div><div class="v">${money(L.credits_outstanding_value)}</div><div class="s">${L.credits_outstanding ?? 0} unused points · deposits held ${money(L.deposits_held)}</div></div>
     </div>
     <div class="grid cols-2">
-      <div class="card tight"><h3>By machine</h3><table><thead><tr><th>Machine</th><th class="num">Plays</th><th class="num">Credits</th><th class="num">Minutes</th><th class="num">Value</th></tr></thead><tbody>
+      <div class="card tight"><h3>By machine</h3><table><thead><tr><th>Machine</th><th class="num">Plays</th><th class="num">Points</th><th class="num">Minutes</th><th class="num">Value</th></tr></thead><tbody>
         ${sum.by_machine.map(m => `<tr><td><b>${esc(m.code)}</b> ${esc(m.name)}</td><td class="num">${m.plays}</td><td class="num">${m.credits}</td><td class="num">${m.minutes}</td><td class="num">${money(m.credits * state.settings.credit_price)}</td></tr>`).join('') || '<tr><td class="muted" colspan="5">No plays in this range</td></tr>'}</tbody></table></div>
-      <div class="card tight"><h3>By package</h3><table><thead><tr><th>Package</th><th class="num">Sold</th><th class="num">Credits</th><th class="num">Amount</th></tr></thead><tbody>
+      <div class="card tight"><h3>By package</h3><table><thead><tr><th>Package</th><th class="num">Sold</th><th class="num">Points</th><th class="num">Amount</th></tr></thead><tbody>
         ${sum.by_package.map(p => `<tr><td>${esc(p.name)}</td><td class="num">${p.n}</td><td class="num">${p.credits}</td><td class="num">${money(p.amount)}</td></tr>`).join('') || '<tr><td class="muted" colspan="4">No sales in this range</td></tr>'}</tbody></table></div>
     </div>
-    <div class="card tight"><h3>Transactions <span class="muted small">(latest 500 · export CSV for all)</span></h3><div class="scroll"><table><thead><tr><th>Time</th><th>Type</th><th>Card</th><th>Detail</th><th class="num">Credits</th><th class="num">Bal</th><th class="num">Amount</th><th class="num">Deposit</th><th>Method</th><th>Staff</th></tr></thead><tbody>
+    <div class="card tight"><h3>Transactions <span class="muted small">(latest 500 · export CSV for all)</span></h3><div class="scroll"><table><thead><tr><th>Time</th><th>Type</th><th>Card</th><th>Detail</th><th class="num">Points</th><th class="num">Bal</th><th class="num">Amount</th><th class="num">Deposit</th><th>Method</th><th>Staff</th></tr></thead><tbody>
       ${tx.map(r => `<tr class="${r.type}"><td class="small">${dtFull(r.ts)}</td><td>${r.type}</td><td>${esc(r.card_no || r.uid || '')}</td><td>${esc(r.note || r.machine_name || r.package_name || '')}</td><td class="num">${r.credits || ''}</td><td class="num">${r.balance_after ?? ''}</td><td class="num">${r.amount ? money(r.amount) : ''}</td><td class="num">${r.deposit ? money(r.deposit) : ''}</td><td>${r.method || ''}</td><td>${esc(r.staff || '')}</td></tr>`).join('') || '<tr><td class="muted" colspan="10">Nothing in this range</td></tr>'}</tbody></table></div></div>`;
 }
 $('#showShifts').addEventListener('click', async () => {
@@ -369,8 +373,8 @@ $('#addMachine').addEventListener('click', () => machineModal(null));
 function packageModal(p) {
   modal(`<h3>${p ? 'Edit' : 'New'} package</h3><div class="fields">
     <div class="field"><label>Name</label><input id="pName" type="text" value="${esc(p?.name ?? '')}"></div>
-    <div class="field"><label>Credits</label><input id="pCredits" type="number" value="${p?.credits ?? ''}"></div>
-    <div class="field"><label>Bonus credits</label><input id="pBonus" type="number" value="${p?.bonus ?? 0}"></div>
+    <div class="field"><label>Points</label><input id="pCredits" type="number" value="${p?.credits ?? ''}"></div>
+    <div class="field"><label>Bonus points</label><input id="pBonus" type="number" value="${p?.bonus ?? 0}"></div>
     <div class="field"><label>Price</label><input id="pPrice" type="number" step="0.01" value="${p?.price ?? ''}"></div>
     <div class="field"><label>Sort</label><input id="pSort" type="number" value="${p?.sort ?? 0}"></div>
     <div class="field"><label>Active</label><select id="pActive"><option value="1">Yes</option><option value="0" ${p && !p.active ? 'selected' : ''}>No</option></select></div></div>
@@ -387,10 +391,10 @@ function machineModal(m) {
     <div class="field"><label>Name</label><input id="mName" type="text" value="${esc(m?.name ?? '')}"></div>
     <div class="field"><label>Zone</label><input id="mZone" type="text" value="${esc(m?.zone ?? '')}"></div>
     <div class="field"><label>Mode</label><select id="mMode"><option value="time" ${m?.mode !== 'game' ? 'selected' : ''}>Timed (1/2/3 min)</option><option value="game" ${m?.mode === 'game' ? 'selected' : ''}>Per game</option></select></div>
-    <div class="field"><label>1 min (credits)</label><input id="mP1" type="number" value="${m?.price_1 ?? ''}"></div>
+    <div class="field"><label>1 min (points)</label><input id="mP1" type="number" value="${m?.price_1 ?? ''}"></div>
     <div class="field"><label>2 min</label><input id="mP2" type="number" value="${m?.price_2 ?? ''}"></div>
     <div class="field"><label>3 min</label><input id="mP3" type="number" value="${m?.price_3 ?? ''}"></div>
-    <div class="field"><label>Per game (credits)</label><input id="mPG" type="number" value="${m?.price_game ?? ''}"></div>
+    <div class="field"><label>Per game (points)</label><input id="mPG" type="number" value="${m?.price_game ?? ''}"></div>
     <div class="field"><label>Sort</label><input id="mSort" type="number" value="${m?.sort ?? 0}"></div>
     <div class="field"><label>Active</label><select id="mActive"><option value="1">Yes</option><option value="0" ${m && !m.active ? 'selected' : ''}>No</option></select></div></div>
     <div class="field"><label>Webhook when play starts (optional, e.g. http://192.168.1.50/relay/0?turn=on)</label><input id="mWS" type="url" value="${esc(m?.webhook_start ?? '')}"></div>

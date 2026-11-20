@@ -136,7 +136,7 @@ export function listPackages(db, onlyActive = false) {
 export function savePackage(db, data) {
   if (!data.name) throw new ApiError(400, 'Package name is required.');
   const credits = intCredits(data.credits), bonus = intCredits(data.bonus ?? 0, 'bonus');
-  if (credits <= 0 || bonus < 0) throw new ApiError(400, 'Credits must be positive.');
+  if (credits <= 0 || bonus < 0) throw new ApiError(400, 'Points must be positive.');
   const price = money(data.price, 'price');
   const active = data.active === false || data.active === 0 || data.active === '0' ? 0 : 1;
   if (data.id) {
@@ -150,6 +150,19 @@ export function savePackage(db, data) {
 }
 
 // ---------- cards ----------
+export function nextCardNumbers(db, count = 1) {
+  // Reserve printed card numbers (the barcode value = the card UID), e.g. FC000001.
+  const s = getSettings(db);
+  count = Math.min(500, Math.max(1, Math.floor(Number(count) || 1)));
+  const start = Math.max(1, Number(s.next_card_no) || 1);
+  const digits = Math.min(12, Math.max(3, Number(s.card_digits) || 6));
+  const prefix = String(s.card_prefix || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const codes = [];
+  for (let i = 0; i < count; i++) codes.push(`${prefix}${String(start + i).padStart(digits, '0')}`);
+  db.prepare('UPDATE settings SET value=? WHERE key=?').run(String(start + count), 'next_card_no');
+  return codes;
+}
+
 function cardRow(db, uid) {
   return db.prepare('SELECT * FROM cards WHERE uid=?').get(uid) ?? null;
 }
@@ -192,7 +205,7 @@ function resolvePurchase(db, data) {
   const credits = intCredits(data.credits ?? 0);
   if (credits < 0) throw new ApiError(400, 'Credits cannot be negative.');
   const amount = data.amount != null && data.amount !== '' ? money(data.amount) : Math.round(credits * Number(s.credit_price) * 100) / 100;
-  return { credits, amount, package_id: null, label: credits ? `${credits} credits` : 'no credits' };
+  return { credits, amount, package_id: null, label: credits ? `${credits} points` : 'no points' };
 }
 
 export function issueCard(db, data) {
@@ -236,7 +249,7 @@ function requireActiveCard(db, rawUid) {
 export function topUp(db, rawUid, data) {
   const card = requireActiveCard(db, rawUid);
   const buy = resolvePurchase(db, data);
-  if (buy.credits <= 0) throw new ApiError(400, 'Choose a package or enter credits.');
+  if (buy.credits <= 0) throw new ApiError(400, 'Choose a package or enter points.');
   const m = method(data.method);
   const shift = currentShift(db);
   db.exec('BEGIN');
@@ -254,7 +267,7 @@ export function adjustCredits(db, rawUid, data) {
   // Manual correction (e.g. machine failed mid-ride). No money moves. Admin PIN checked by the route.
   const card = requireActiveCard(db, rawUid);
   const credits = intCredits(data.credits);
-  if (!credits) throw new ApiError(400, 'Enter a non-zero credit change.');
+  if (!credits) throw new ApiError(400, 'Enter a non-zero point change.');
   if (card.balance + credits < 0) throw new ApiError(400, 'Balance cannot go below zero.');
   const shift = currentShift(db);
   db.exec('BEGIN');
@@ -281,7 +294,7 @@ export function setBlocked(db, rawUid, blocked, data = {}) {
 }
 
 export function returnCard(db, rawUid, data = {}) {
-  // Customer hands the card back: refund the deposit and (by policy) any unused credits.
+  // Customer hands the card back: refund the deposit and (by policy) any unused points.
   const uid = normalizeUid(rawUid);
   const card = cardRow(db, uid);
   if (!card) throw new ApiError(404, 'Unknown card.');
@@ -297,7 +310,7 @@ export function returnCard(db, rawUid, data = {}) {
     db.prepare(`UPDATE cards SET status='returned', balance=0, deposit=0, last_used_at=? WHERE id=?`).run(now(), card.id);
     const tx = insertTx(db, { type: 'RETURN', card_id: card.id, shift_id: shift?.id, credits: -card.balance, amount: -creditMoney,
       deposit: -card.deposit, method: m, balance_after: 0, staff: data.staff ?? shift?.staff,
-      note: `Card returned · deposit ${card.deposit} back · ${creditsBack} credits ${refundCredits ? 'refunded' : 'forfeited'}` });
+      note: `Card returned · deposit ${card.deposit} back · ${creditsBack} points ${refundCredits ? 'refunded' : 'forfeited'}` });
     db.exec('COMMIT');
     return { card: cardRow(db, uid), transaction: tx, refund_total: Math.round((creditMoney + card.deposit) * 100) / 100,
       refund_deposit: card.deposit, refund_credits_money: creditMoney, credits_forfeited: refundCredits ? 0 : card.balance };
@@ -332,7 +345,7 @@ export function startPlay(db, data) {
   const credits = priceFor(machine, minutes);
   if (credits == null) throw new ApiError(400, 'This machine has no price set. Ask staff.');
   if (card.balance < credits) {
-    throw new ApiError(402, `Not enough credits. Need ${credits}, card has ${card.balance}. Top up at the counter.`,
+    throw new ApiError(402, `Not enough points. Need ${credits}, card has ${card.balance}. Top up at the counter.`,
       { uid: card.uid, balance: card.balance, needed: credits });
   }
   const current = activePlay(db, machine.id);
@@ -408,7 +421,7 @@ export function reportSummary(db, { from, to } = {}) {
   const byMachine = db.prepare(`SELECT m.code, m.name, COUNT(*) AS plays, SUM(-t.credits) AS credits, SUM(COALESCE(t.minutes,0)) AS minutes
                                 FROM transactions t JOIN machines m ON m.id=t.machine_id
                                 WHERE t.type='PLAY' AND t.ts BETWEEN ? AND ? GROUP BY m.id ORDER BY credits DESC`).all(f, t);
-  const byPackage = db.prepare(`SELECT COALESCE(p.name,'Custom credits') AS name, COUNT(*) AS n, SUM(t.credits) AS credits, SUM(t.amount) AS amount
+  const byPackage = db.prepare(`SELECT COALESCE(p.name,'Custom points') AS name, COUNT(*) AS n, SUM(t.credits) AS credits, SUM(t.amount) AS amount
                                 FROM transactions t LEFT JOIN packages p ON p.id=t.package_id
                                 WHERE t.type IN ('ISSUE','TOPUP') AND t.ts BETWEEN ? AND ? GROUP BY p.id ORDER BY amount DESC`).all(f, t);
   const byHour = db.prepare(`SELECT substr(ts,12,2) AS hour_utc, SUM(CASE WHEN type='PLAY' THEN 1 ELSE 0 END) AS plays,

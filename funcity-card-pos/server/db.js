@@ -7,39 +7,45 @@ import { dirname } from 'node:path';
 export const DEFAULT_SETTINGS = {
   brand: 'Fun City',
   company_code: 'FUNCITY',          // tag used in exports so the group accounts can pick it up
-  currency: 'AED',
-  credit_price: '1',                // money per 1 credit
-  card_deposit: '10',               // refundable deposit per card
-  refund_credits_on_return: '1',    // 1 = pay back unused credits when a card is returned
+  currency: '₹',
+  credit_price: '1',                // rupees per 1 point (₹100 paid = 100 points)
+  card_deposit: '0',                // refundable deposit per card (0 = none)
+  refund_credits_on_return: '1',    // 1 = pay back unused points when a card is returned
+  card_prefix: 'FC',                // printed card numbers: FC000001, FC000002 …
+  card_digits: '6',
+  next_card_no: '1',                // next number the POS will print / generate
   max_minutes: '3',
   choose_timeout_sec: '25',         // station screen: seconds to pick minutes before going idle
   admin_pin: '1234',                // guards setup, adjustments, refunds and returns
   receipt_header: '',               // e.g. address / phone printed under the brand
-  receipt_footer: 'Prepaid only. Credits are taken when the timer starts. Keep your card safe.',
+  receipt_footer: 'Prepaid only. Points are taken when the timer starts. Keep your card safe.',
   setup_done: '0',
 };
 
 // Machines from the floor plan (zones A–G) mapped to the supplier's equipment list.
+// Point prices are placeholders at ₹1 = 1 point: edit them in Setup → Machines.
 const SEED_MACHINES = [
-  ['A',  'Kids Basketball Machine', 'A',  'time', 2, 3, 4, null, 'Supplier item 8 · 154×81×190 cm · 150 kg'],
-  ['B',  'Ball Throw',              'B',  'time', 1, 2, 3, null, 'Target wall 5\'0" × 2\'6"'],
-  ['C1', '3D Motor Bike',           'C',  'time', 1, 2, 3, null, 'Supplier item 4 · 120×70×150 cm · 65 kg'],
-  ['C2', '3D Classic Car',          'C',  'time', 1, 2, 3, null, 'Supplier item 5 · 120×70×150 cm · 65 kg'],
-  ['C3', 'Scooter Ride',            'C',  'time', 1, 2, 3, null, ''],
-  ['C4', '3D Video Horse Ride',     'C',  'time', 1, 2, 3, null, 'Supplier item 3 · 120×70×150 cm · 60 kg'],
-  ['D1', 'RC Racing · Driver 1',    'D',  'time', 2, 4, 5, null, 'RC track station 1'],
-  ['D2', 'RC Racing · Driver 2',    'D',  'time', 2, 4, 5, null, 'RC track station 2'],
-  ['D3', 'RC Racing · Driver 3',    'D',  'time', 2, 4, 5, null, 'RC track station 3'],
-  ['D4', 'RC Racing · Driver 4',    'D',  'time', 2, 4, 5, null, 'RC track station 4'],
-  ['G',  'Hit A Frog (Whack-a-mole)','G', 'time', 1, 2, 3, null, 'Supplier item 2 · 115×93×145 cm · 85 kg · 2 player'],
-  ['H',  'Air Hockey',              'H',  'game', null, null, null, 3, 'Supplier item 6 · 163×88×73 cm · 150 kg · per game'],
-  ['T',  'Toy Catcher',             'T',  'game', null, null, null, 2, 'Supplier item 7 · 95×82×210 cm · 85 kg · per play'],
+  ['A',  'Kids Basketball Machine', 'A',  'time', 20, 30, 40, null, 'Supplier item 8 · 154×81×190 cm · 150 kg'],
+  ['B',  'Ball Throw',              'B',  'time', 10, 20, 30, null, 'Target wall 5\'0" × 2\'6"'],
+  ['C1', '3D Motor Bike',           'C',  'time', 10, 20, 30, null, 'Supplier item 4 · 120×70×150 cm · 65 kg'],
+  ['C2', '3D Classic Car',          'C',  'time', 10, 20, 30, null, 'Supplier item 5 · 120×70×150 cm · 65 kg'],
+  ['C3', 'Scooter Ride',            'C',  'time', 10, 20, 30, null, ''],
+  ['C4', '3D Video Horse Ride',     'C',  'time', 10, 20, 30, null, 'Supplier item 3 · 120×70×150 cm · 60 kg'],
+  ['D1', 'RC Racing · Driver 1',    'D',  'time', 20, 40, 50, null, 'RC track station 1'],
+  ['D2', 'RC Racing · Driver 2',    'D',  'time', 20, 40, 50, null, 'RC track station 2'],
+  ['D3', 'RC Racing · Driver 3',    'D',  'time', 20, 40, 50, null, 'RC track station 3'],
+  ['D4', 'RC Racing · Driver 4',    'D',  'time', 20, 40, 50, null, 'RC track station 4'],
+  ['G',  'Hit A Frog (Whack-a-mole)','G', 'time', 10, 20, 30, null, 'Supplier item 2 · 115×93×145 cm · 85 kg · 2 player'],
+  ['H',  'Air Hockey',              'H',  'game', null, null, null, 30, 'Supplier item 6 · 163×88×73 cm · 150 kg · per game'],
+  ['T',  'Toy Catcher',             'T',  'game', null, null, null, 20, 'Supplier item 7 · 95×82×210 cm · 85 kg · per play'],
 ];
 
+// ₹1 = 1 point. Add bonus points in Setup if you want offers like 75 points for ₹50.
 const SEED_PACKAGES = [
-  ['Starter', 20, 0, 20, 'about 15–20 min of play'],
-  ['Fun',     50, 5, 50, 'most popular · 10% bonus'],
-  ['Super',   100, 15, 100, '15% bonus · birthdays'],
+  ['50 points',  50,  0, 50,  ''],
+  ['100 points', 100, 0, 100, 'most popular'],
+  ['200 points', 200, 0, 200, ''],
+  ['500 points', 500, 0, 500, 'birthdays & groups'],
 ];
 
 export function openDb(path) {

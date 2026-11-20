@@ -22,7 +22,9 @@ test('bootstrap seeds machines, packages and settings', async () => {
   const { status, data } = await call('GET', '/api/bootstrap');
   assert.equal(status, 200);
   assert.ok(data.machines.length >= 12);
-  assert.equal(data.packages.length, 3);
+  assert.equal(data.packages.length, 4);
+  assert.equal(data.settings.currency, '₹');
+  assert.equal(data.settings.card_deposit, '0');
   assert.equal(data.settings.brand, 'Fun City');
   assert.equal(data.settings.admin_pin, undefined, 'PIN must not leak to clients');
 });
@@ -34,13 +36,13 @@ test('shift open / close with expected cash', async () => {
   assert.equal(r.status, 409);
 });
 
-test('issue card with Fun package: 55 credits, price + deposit due', async () => {
-  const r = await call('POST', '/api/cards/issue', { uid: '0001 2345', card_no: 'FC-001', holder_name: 'Omar', package_id: 2, method: 'cash' });
+test('issue card with 100-point package: 100 points, price + optional deposit due', async () => {
+  const r = await call('POST', '/api/cards/issue', { uid: '0001 2345', card_no: 'FC-001', holder_name: 'Omar', package_id: 2, method: 'cash', deposit: 10 });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(r.data.card.uid, '00012345');
-  assert.equal(r.data.card.balance, 55);
+  assert.equal(r.data.card.balance, 100);
   assert.equal(r.data.card.deposit, 10);
-  assert.equal(r.data.total_due, 60);
+  assert.equal(r.data.total_due, 110);
   const dup = await call('POST', '/api/cards/issue', { uid: '00012345', package_id: 1 });
   assert.equal(dup.status, 409);
 });
@@ -51,18 +53,18 @@ test('unknown card lookup returns found:false', async () => {
   assert.equal(r.data.found, false);
 });
 
-test('top-up with custom credits uses credit_price', async () => {
+test('top-up with custom points uses credit_price (₹1 = 1 point)', async () => {
   const r = await call('POST', '/api/cards/00012345/topup', { credits: 10, method: 'card' });
   assert.equal(r.status, 200);
-  assert.equal(r.data.card.balance, 65);
+  assert.equal(r.data.card.balance, 110);
   assert.equal(r.data.total_due, 10);
 });
 
-test('play: basketball 3 min costs 4 credits, timer set, extend on second tap', async () => {
+test('play: basketball 3 min costs 40 points, timer set, extend on second scan', async () => {
   let r = await call('POST', '/api/play', { uid: '00012345', machine: 'A', minutes: 3 });
   assert.equal(r.status, 200, JSON.stringify(r.data));
-  assert.equal(r.data.charged, 4);
-  assert.equal(r.data.balance, 61);
+  assert.equal(r.data.charged, 40);
+  assert.equal(r.data.balance, 70);
   assert.equal(r.data.extended, false);
   const ends1 = new Date(r.data.play.ends_at).getTime();
   assert.ok(ends1 - Date.now() > 179_000 && ends1 - Date.now() <= 180_000);
@@ -72,7 +74,7 @@ test('play: basketball 3 min costs 4 credits, timer set, extend on second tap', 
   assert.equal(r.data.extended, true);
   assert.equal(new Date(r.data.play.ends_at).getTime(), ends1 + 60_000);
   assert.equal(r.data.play.minutes, 4);
-  assert.equal(r.data.play.credits, 6);
+  assert.equal(r.data.play.credits, 60);
 
   const live = await call('GET', '/api/machines/A/active');
   assert.equal(live.data.play.id, r.data.play.id);
@@ -84,14 +86,14 @@ test('machine busy with another card is refused', async () => {
   assert.equal(r.status, 409);
 });
 
-test('per-game machine charges price_game and rejects when credits short', async () => {
-  await call('POST', '/api/cards/issue', { uid: 'POOR1', credits: 2, method: 'cash' });
-  let r = await call('POST', '/api/play', { uid: 'POOR1', machine: 'T' });   // toy catcher = 2 credits
+test('per-game machine charges price_game and rejects when points short', async () => {
+  await call('POST', '/api/cards/issue', { uid: 'POOR1', credits: 20, method: 'cash' });
+  let r = await call('POST', '/api/play', { uid: 'POOR1', machine: 'T' });   // toy catcher = 20 points
   assert.equal(r.status, 200);
   assert.equal(r.data.balance, 0);
-  r = await call('POST', '/api/play', { uid: 'POOR1', machine: 'H' });       // air hockey = 3 credits
+  r = await call('POST', '/api/play', { uid: 'POOR1', machine: 'H' });       // air hockey = 30 points
   assert.equal(r.status, 402);
-  assert.equal(r.data.needed, 3);
+  assert.equal(r.data.needed, 30);
 });
 
 test('bad minutes / unknown card / blocked card', async () => {
@@ -116,35 +118,35 @@ test('adjust needs PIN and cannot go negative', async () => {
   assert.equal(r.status, 400);
   r = await call('POST', '/api/cards/CARD2/adjust', { credits: 2, note: 'ride failed' }, { 'x-admin-pin': PIN });
   assert.equal(r.status, 200);
-  assert.equal(r.data.card.balance, 22);
+  assert.equal(r.data.card.balance, 52);
 });
 
-test('return card refunds deposit and unused credits', async () => {
+test('return card refunds deposit (if any) and unused points', async () => {
   const r = await call('POST', '/api/cards/CARD2/return', { method: 'cash' }, { 'x-admin-pin': PIN });
   assert.equal(r.status, 200, JSON.stringify(r.data));
-  assert.equal(r.data.refund_deposit, 10);
-  assert.equal(r.data.refund_credits_money, 22);
-  assert.equal(r.data.refund_total, 32);
+  assert.equal(r.data.refund_deposit, 0);
+  assert.equal(r.data.refund_credits_money, 52);
+  assert.equal(r.data.refund_total, 52);
   assert.equal(r.data.card.status, 'returned');
   const again = await call('POST', '/api/cards/CARD2/return', {}, { 'x-admin-pin': PIN });
   assert.equal(again.status, 410);
   // a returned card can be issued to a new customer
   const re = await call('POST', '/api/cards/issue', { uid: 'CARD2', package_id: 1, method: 'online' });
   assert.equal(re.status, 200);
-  assert.equal(re.data.card.balance, 20);
+  assert.equal(re.data.card.balance, 50);
 });
 
 test('report summary and CSV export are consistent', async () => {
   const r = await call('GET', '/api/reports/summary');
   assert.equal(r.status, 200);
   const t = r.data.totals;
-  // sales: 50 (Fun) + 10 (custom) + 20 (Starter CARD2) + 2 (POOR1) + 20 (re-issue) = 102
-  assert.equal(t.credit_sales, 102);
-  assert.equal(t.credit_refunds, 22);
-  assert.equal(t.deposits_in, 40);
-  assert.equal(t.deposits_out, 10);
-  assert.equal(t.credits_used, 8); // 4 + 2 + 2
-  assert.ok(r.data.by_machine.find(m => m.code === 'A').credits === 6);
+  // sales: 100 + 10 (custom) + 50 (CARD2) + 20 (POOR1) + 50 (re-issue) = 230
+  assert.equal(t.credit_sales, 230);
+  assert.equal(t.credit_refunds, 52);
+  assert.equal(t.deposits_in, 10);
+  assert.equal(t.deposits_out, 0);
+  assert.equal(t.credits_used, 80); // 40 + 20 + 20
+  assert.ok(r.data.by_machine.find(m => m.code === 'A').credits === 60);
   const csv = await call('GET', '/api/reports/transactions?format=csv');
   assert.equal(csv.status, 200);
   assert.ok(csv.data.replace(/^\uFEFF/, '').startsWith('company,id,ts,type'));
@@ -154,10 +156,10 @@ test('report summary and CSV export are consistent', async () => {
 test('close shift computes expected cash from cash-method transactions', async () => {
   const r = await call('POST', '/api/shifts/close', { closing_cash: 200 });
   assert.equal(r.status, 200);
-  // cash in: 60 (issue) + 30 (CARD2 issue incl deposit) + 12 (POOR1) - 32 (return) = 70 ; opening 100 -> 170
-  assert.equal(r.data.expected_cash, 170);
+  // cash in: 110 (issue incl deposit) + 50 (CARD2) + 20 (POOR1) - 52 (return) = 128 ; opening 100 -> 228
+  assert.equal(r.data.expected_cash, 228);
   assert.equal(r.data.totals.by_method.card, 10);
-  assert.equal(r.data.totals.by_method.online, 30);
+  assert.equal(r.data.totals.by_method.online, 50);
 });
 
 test('settings update requires PIN and hides it afterwards', async () => {
@@ -169,4 +171,29 @@ test('settings update requires PIN and hides it afterwards', async () => {
   assert.equal(r.data.admin_pin, undefined);
   r = await call('POST', '/api/pin/check', { pin: '0000' });
   assert.equal(r.status, 403);
+});
+
+test('card number generator reserves sequential printed numbers', async () => {
+  let r = await call('POST', '/api/cards/next', { count: 3 });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.data.codes, ['FC000001', 'FC000002', 'FC000003']);
+  r = await call('POST', '/api/cards/next', {});
+  assert.deepEqual(r.data.codes, ['FC000004']);
+  // a printed number works as the card UID straight away
+  r = await call('POST', '/api/cards/issue', { uid: 'FC000004', card_no: 'FC000004', package_id: 1, method: 'cash' });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.card.balance, 50);
+  assert.equal(r.data.total_due, 50);
+});
+
+test('Code 128 encoder: valid structure and checksum', async () => {
+  const { code128Values, code128Widths, code128Svg } = await import('../public/js/barcode.js');
+  const v = code128Values('FC000123');
+  assert.equal(v[0], 104); assert.equal(v.at(-1), 106);
+  const sum = 104 + [...'FC000123'].reduce((a, ch, i) => a + (ch.charCodeAt(0) - 32) * (i + 1), 0);
+  assert.equal(v.at(-2), sum % 103);
+  const w = code128Widths('FC000123');
+  assert.equal(w.length, (v.length - 1) * 6 + 7);
+  assert.ok(code128Svg('FC000123').includes('<svg'));
+  assert.throws(() => code128Values('bad\u00e9'));
 });

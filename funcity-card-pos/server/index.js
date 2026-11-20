@@ -70,6 +70,7 @@ export function createApp(dbPath = DB_PATH) {
 
     ['GET', /^\/api\/cards$/, (req, p, q) => api.searchCards(db, q.get('q') ?? '')],
     ['GET', /^\/api\/cards\/([^/]+)$/, (req, p) => api.getCard(db, p[0])],
+    ['POST', /^\/api\/cards\/next$/, (req, p, q, b) => ({ codes: api.nextCardNumbers(db, b.count ?? 1) })],
     ['POST', /^\/api\/cards\/issue$/, (req, p, q, b) => api.issueCard(db, b)],
     ['POST', /^\/api\/cards\/([^/]+)\/topup$/, (req, p, q, b) => api.topUp(db, p[0], b)],
     ['POST', /^\/api\/cards\/([^/]+)\/adjust$/, (req, p, q, b) => { needPin(req); return api.adjustCredits(db, p[0], b); }],
@@ -107,6 +108,7 @@ export function createApp(dbPath = DB_PATH) {
   async function serveStatic(req, res, pathname) {
     let file = pathname === '/' ? '/index.html' : pathname;
     if (file === '/station') file = '/station.html';
+    if (file === '/print-cards') file = '/print-cards.html';
     const full = normalize(join(PUBLIC, file));
     if (!full.startsWith(PUBLIC)) { res.writeHead(403); return res.end(); }
     try {

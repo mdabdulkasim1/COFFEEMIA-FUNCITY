@@ -24,7 +24,7 @@
 
 <main>
   <div id="setupBanner" class="banner hidden" style="margin-bottom:14px">
-    <span>👋</span><div><b>First run:</b> set your brand, currency, credit price, card deposit and package prices in <b>Setup</b> before selling cards.</div>
+    <span>👋</span><div><b>First run:</b> set your brand, currency, point price, card deposit and package prices in <b>Setup</b> before selling cards.</div>
     <div class="spacer"></div><button class="btn sm primary" data-goto="setup">Open Setup</button>
   </div>
 
@@ -34,19 +34,20 @@
       <div class="stack">
         <div class="tapzone" id="tapzone">
           <div class="icon">📶</div>
-          <h2>Tap card on the reader</h2>
-          <div class="muted">Issue · top-up · balance · return</div>
+          <h2>Scan card on the reader</h2>
+          <div class="muted">Scan the barcode on the card · issue · top-up · balance · return</div>
           <div class="row" style="justify-content:center;margin-top:14px">
             <input id="manualUid" data-scan-target="1" type="text" class="big" placeholder="or type card UID" style="max-width:320px" autocomplete="off">
             <button class="btn primary" id="manualGo">Go</button>
           </div>
+          <div class="row" style="justify-content:center;margin-top:12px"><button class="btn yellow" id="newCardBtn">＋ New card number (print barcode)</button></div>
         </div>
         <div id="cardPanel" class="card hidden"></div>
       </div>
       <div class="stack">
         <div class="card cart" id="cartPanel">
           <h3>Sale</h3>
-          <div id="cartLines" class="muted">Tap a card to start.</div>
+          <div id="cartLines" class="muted">Scan a card to start.</div>
         </div>
         <div class="card" id="lastSale"></div>
       </div>
@@ -58,7 +59,7 @@
     <div class="card">
       <div class="row between">
         <h2>Cards</h2>
-        <div class="row"><input type="text" id="cardSearch" placeholder="Search UID, card no, name, phone" style="width:320px"><button class="btn sm" id="cardSearchBtn">Search</button></div>
+        <div class="row"><a class="btn sm yellow" href="/print-cards" target="_blank">🖨 Print blank cards</a><input type="text" id="cardSearch" placeholder="Search UID, card no, name, phone" style="width:320px"><button class="btn sm" id="cardSearchBtn">Search</button></div>
       </div>
       <div class="scroll" style="margin-top:12px"><table id="cardsTable"><thead><tr><th>Card no</th><th>UID</th><th>Holder</th><th>Phone</th><th class="num">Balance</th><th class="num">Deposit</th><th>Status</th><th>Last used</th><th></th></tr></thead><tbody></tbody></table></div>
     </div>
@@ -101,12 +102,15 @@
             <div class="fields">
               <div class="field"><label>Brand name (on screens &amp; receipt)</label><input name="brand" type="text"></div>
               <div class="field"><label>Company code (for group accounts export)</label><input name="company_code" type="text"></div>
+              <div class="field"><label>Card number prefix</label><input name="card_prefix" type="text" placeholder="FC"></div>
+              <div class="field"><label>Card number digits</label><input name="card_digits" type="number" min="3" max="12"></div>
+              <div class="field"><label>Next card number</label><input name="next_card_no" type="number" min="1"></div>
               <div class="field"><label>Currency symbol / code</label><input name="currency" type="text"></div>
-              <div class="field"><label>Price of 1 credit</label><input name="credit_price" type="number" step="0.01" min="0"></div>
+              <div class="field"><label>Price of 1 point</label><input name="credit_price" type="number" step="0.01" min="0"></div>
               <div class="field"><label>Card deposit (refundable)</label><input name="card_deposit" type="number" step="0.01" min="0"></div>
               <div class="field"><label>Max minutes per turn</label><select name="max_minutes"><option>1</option><option>2</option><option>3</option></select></div>
               <div class="field"><label>Station: seconds to pick minutes</label><input name="choose_timeout_sec" type="number" min="5" max="120"></div>
-              <div class="field"><label>Refund unused credits on return?</label><select name="refund_credits_on_return"><option value="1">Yes, pay back</option><option value="0">No, forfeited</option></select></div>
+              <div class="field"><label>Refund unused points on return?</label><select name="refund_credits_on_return"><option value="1">Yes, pay back</option><option value="0">No, forfeited</option></select></div>
             </div>
             <div class="field"><label>Receipt header (address / phone)</label><input name="receipt_header" type="text"></div>
             <div class="field"><label>Receipt footer</label><input name="receipt_footer" type="text"></div>
@@ -116,13 +120,13 @@
         </div>
         <div class="card">
           <div class="row between"><h2>Packages</h2><button class="btn sm" id="addPackage">+ Add package</button></div>
-          <p class="muted small">Customers buy credits in packages at the counter. Bonus credits are free extra credits.</p>
-          <div class="scroll"><table id="pkgTable"><thead><tr><th>Name</th><th class="num">Credits</th><th class="num">Bonus</th><th class="num">Price</th><th>Active</th><th></th></tr></thead><tbody></tbody></table></div>
+          <p class="muted small">₹1 = 1 point by default (set "Price of 1 point" above). Customers buy points in packages at the counter. Use <b>bonus</b> for offers such as 75 points for ₹50.</p>
+          <div class="scroll"><table id="pkgTable"><thead><tr><th>Name</th><th class="num">Points</th><th class="num">Bonus</th><th class="num">Price</th><th>Active</th><th></th></tr></thead><tbody></tbody></table></div>
         </div>
       </div>
       <div class="card">
-        <div class="row between"><h2>Machines &amp; credit prices</h2><button class="btn sm" id="addMachine">+ Add machine</button></div>
-        <p class="muted small">Timed machines charge credits for 1 / 2 / 3 minutes. Per-game machines (air hockey, toy catcher) charge one price per play. Webhooks are optional URLs for a smart plug or relay that switches the machine on and off.</p>
+        <div class="row between"><h2>Machines &amp; point prices</h2><button class="btn sm" id="addMachine">+ Add machine</button></div>
+        <p class="muted small">Timed machines charge points for 1 / 2 / 3 minutes. Per-game machines (air hockey, toy catcher) charge one price per play. Webhooks are optional URLs for a smart plug or relay that switches the machine on and off.</p>
         <div class="scroll"><table id="machTable"><thead><tr><th>Code</th><th>Name</th><th>Zone</th><th>Mode</th><th class="num">1 min</th><th class="num">2 min</th><th class="num">3 min</th><th class="num">Per game</th><th>Active</th><th>Station link</th><th></th></tr></thead><tbody></tbody></table></div>
       </div>
     </div>
