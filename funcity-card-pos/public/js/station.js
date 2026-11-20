@@ -88,11 +88,11 @@ function render() {
   const rem = remaining();
   if (st.mode === 'running' && rem <= 0) return finish();
   const isGame = machine.mode === 'game';
-  const head = `<div class="st-top"><div><span class="code">${esc(machine.code)}</span> &nbsp; <span class="name">${esc(machine.name)}</span></div><div class="muted small" style="color:#fff;opacity:.6">${esc(settings.brand || '')} · ${isGame ? `${machine.price_game} points per game` : `${machine.price_1} · ${machine.price_2} · ${machine.price_3} points`}</div></div>`;
+  const head = `<div class="st-top"><div><img src="/img/logo-small.png" alt=""><span class="code">${esc(machine.code)}</span> &nbsp; <span class="name">${esc(machine.name)}</span></div><div class="muted small" style="color:#fff;opacity:.6">${esc(settings.brand || '')} · ${isGame ? `${machine.price_game} points per game` : `${machine.price_1} · ${machine.price_2} · ${machine.price_3} points`}</div></div>`;
   const foot = `<div class="st-foot"><span>Prepaid card only · points are taken when the timer starts</span><span>${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>`;
   let body = '';
   if (st.mode === 'idle') {
-    body = `<div class="headline">Scan your card to play</div>
+    body = `<img class="idle-logo" src="/img/logo.png" alt=""><div class="headline">Scan your card to play</div>
       <div class="lcd"><div><div class="l">BALANCE</div><div class="v">--</div></div><div class="r"><div class="l">TIME LEFT</div><div class="v">--:--</div></div></div>
       ${isGame ? `<div class="scan pulse">📶 Scan card here · ${machine.price_game} points per game</div>` : `<div class="mins">${minsButtons(true)}</div><div class="scan pulse">📶 Scan card here</div>`}
       <div class="msg ${st.msg ? 'err' : ''}">${esc(st.msg)}</div>`;

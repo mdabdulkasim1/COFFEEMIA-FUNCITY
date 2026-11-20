@@ -5,13 +5,13 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 export const DEFAULT_SETTINGS = {
-  brand: 'Fun City',
+  brand: 'Coffeemia Kids Play Zone',
   company_code: 'FUNCITY',          // tag used in exports so the group accounts can pick it up
   currency: '₹',
   credit_price: '1',                // rupees per 1 point (₹100 paid = 100 points)
   card_deposit: '0',                // refundable deposit per card (0 = none)
   refund_credits_on_return: '1',    // 1 = pay back unused points when a card is returned
-  card_prefix: 'FC',                // printed card numbers: FC000001, FC000002 …
+  card_prefix: 'CK',                // printed card numbers: CK000001, CK000002 …
   card_digits: '6',
   next_card_no: '1',                // next number the POS will print / generate
   max_minutes: '3',

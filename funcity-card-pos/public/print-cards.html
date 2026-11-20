@@ -11,17 +11,17 @@
   .toolbar .field { margin: 0; min-width: 140px; }
   .sheet { display: grid; grid-template-columns: repeat(2, var(--cw)); gap: 6mm 8mm; justify-content: center; padding: 10mm; background: #fff; margin: 14px auto; width: 210mm; box-shadow: var(--shadow); }
   .pc { width: var(--cw); height: var(--ch); border-radius: 3.2mm; overflow: hidden; position: relative; break-inside: avoid; page-break-inside: avoid; font-family: "Nunito", "Segoe UI", system-ui, sans-serif; }
-  .pc.front { background: var(--teal); color: #fff; padding: 4.5mm 5mm; }
-  .pc.front .y { position: absolute; width: 30mm; height: 30mm; border-radius: 50%; background: var(--yellow); right: -8mm; top: -10mm; }
-  .pc.front .p { position: absolute; width: 20mm; height: 20mm; border-radius: 50%; background: var(--pink); right: 10mm; bottom: -11mm; }
-  .pc.front .t { font-size: 6.2mm; font-weight: 900; letter-spacing: .3mm; line-height: 1; position: relative; }
-  .pc.front .b { font-size: 3mm; font-weight: 800; opacity: .9; margin-top: 1mm; position: relative; }
-  .pc.front .bc { position: absolute; left: 5mm; bottom: 4.5mm; width: 52mm; height: 17mm; background: #fff; border-radius: 1.5mm; padding: 1mm 1.5mm; }
+  .pc.front { background: #1e0d07 radial-gradient(ellipse at 50% 30%, #4a2410 0%, #1e0d07 70%); color: #fff6e9; padding: 3mm 5mm; }
+  .pc.front .logo { position: absolute; left: 50%; top: 1.5mm; transform: translateX(-50%); width: 46mm; height: auto; }
+  .pc.front .t { position: absolute; right: 4mm; bottom: 12.5mm; font-size: 3.6mm; font-weight: 900; letter-spacing: .3mm; line-height: 1; color: var(--yellow); }
+  .pc.front .b { display: none; }
+  .pc.front .bc { position: absolute; left: 4mm; bottom: 3.5mm; width: 46mm; height: 15mm; background: #fff; border-radius: 1.5mm; padding: .8mm 1.2mm; }
   .pc.front .bc svg { width: 100%; height: 100%; }
-  .pc.front .tag { position: absolute; right: 5mm; bottom: 5mm; width: 20mm; font-size: 2.6mm; font-weight: 800; text-align: right; line-height: 1.25; }
-  .pc.front .nm { position: absolute; left: 5mm; top: 17mm; font-size: 3mm; font-weight: 700; opacity: .95; max-width: 50mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pc.front .tag { position: absolute; right: 4mm; bottom: 4mm; width: 26mm; font-size: 2.4mm; font-weight: 800; text-align: right; line-height: 1.25; color: #fff6e9; }
+  .pc.front .nm { position: absolute; left: 4mm; bottom: 19.5mm; font-size: 2.8mm; font-weight: 700; color: var(--yellow); max-width: 50mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pc.back { background: #fff; border: .4mm solid var(--line); color: var(--ink); padding: 4mm 5mm; font-size: 2.7mm; line-height: 1.35; }
-  .pc.back h4 { margin: 0 0 1.5mm; font-size: 3.4mm; color: var(--teal); } .pc.back ul { margin: 0; padding-left: 4mm; } .pc.back .f { position: absolute; bottom: 3mm; left: 5mm; right: 5mm; font-size: 2.4mm; opacity: .7; display: flex; justify-content: space-between; }
+  .pc.back h4 { margin: 0 0 1.5mm; font-size: 3.4mm; color: var(--pink); }
+  .pc.back .lg { position: absolute; right: 5mm; top: 3mm; width: 18mm; height: auto; border-radius: 1mm; } .pc.back ul { margin: 0; padding-left: 4mm; } .pc.back .f { position: absolute; bottom: 3mm; left: 5mm; right: 5mm; font-size: 2.4mm; opacity: .7; display: flex; justify-content: space-between; }
   .pc.back .bcs { position: absolute; right: 5mm; bottom: 7mm; width: 26mm; } .pc.back .bcs svg { width: 100%; }
   @media print { @page { size: A4; margin: 8mm; } body { background: #fff; } .toolbar, #toasts { display: none !important; } .sheet { box-shadow: none; margin: 0; padding: 0; width: auto; } .pc.front { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style>
@@ -45,8 +45,8 @@ let settings = {};
 const parse = s => String(s || '').split(/[\s,;]+/).map(x => x.trim().toUpperCase()).filter(Boolean);
 function render(codes) {
   const name = $('#name').value.trim();
-  const front = c => `<div class="pc front"><div class="y"></div><div class="p"></div><div class="t">PLAY CARD</div><div class="b">${esc(settings.brand || '')}</div>${name ? `<div class="nm">${esc(name)}</div>` : ''}<div class="bc">${code128Svg(c)}</div><div class="tag">Scan · Pick minutes · Play</div></div>`;
-  const back = c => `<div class="pc back"><h4>${esc(settings.brand || '')} · Play Card rules</h4><ul><li>Prepaid only: buy and top up points at the counter.</li><li>Scan the card at any machine, pick 1 · 2 · 3 min. Points are taken when the timer starts.</li><li>Max ${esc(settings.max_minutes || 3)} min per turn when there is a queue.</li><li>Keep the card safe: anyone holding it can use the points.</li></ul><div class="bcs">${code128Svg(c, { height: 26, font: 10 })}</div><div class="f"><span>${esc(settings.receipt_header || '')}</span><span>${esc(c)}</span></div></div>`;
+  const front = c => `<div class="pc front"><img class="logo" src="/img/logo.png" alt=""><div class="t">PLAY CARD</div>${name ? `<div class="nm">${esc(name)}</div>` : ''}<div class="bc">${code128Svg(c)}</div><div class="tag">Scan · Pick minutes · Play</div></div>`;
+  const back = c => `<div class="pc back"><img class="lg" src="/img/logo.png" alt=""><h4>Play Card rules</h4><ul style="max-width:52mm"><li>Prepaid only: buy and top up points at the counter.</li><li>Scan the card at any machine, pick 1 · 2 · 3 min. Points are taken when the timer starts.</li><li>Max ${esc(settings.max_minutes || 3)} min per turn when there is a queue.</li><li>Keep the card safe: anyone holding it can use the points.</li></ul><div class="bcs">${code128Svg(c, { height: 26, font: 10 })}</div><div class="f"><span>${esc(settings.receipt_header || '')}</span><span>${esc(c)}</span></div></div>`;
   const sheets = [];
   for (let i = 0; i < codes.length; i += 10) {
     const chunk = codes.slice(i, i + 10);

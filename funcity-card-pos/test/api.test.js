@@ -25,7 +25,7 @@ test('bootstrap seeds machines, packages and settings', async () => {
   assert.equal(data.packages.length, 4);
   assert.equal(data.settings.currency, '₹');
   assert.equal(data.settings.card_deposit, '0');
-  assert.equal(data.settings.brand, 'Fun City');
+  assert.equal(data.settings.brand, 'Coffeemia Kids Play Zone');
   assert.equal(data.settings.admin_pin, undefined, 'PIN must not leak to clients');
 });
 
@@ -176,11 +176,11 @@ test('settings update requires PIN and hides it afterwards', async () => {
 test('card number generator reserves sequential printed numbers', async () => {
   let r = await call('POST', '/api/cards/next', { count: 3 });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.data.codes, ['FC000001', 'FC000002', 'FC000003']);
+  assert.deepEqual(r.data.codes, ['CK000001', 'CK000002', 'CK000003']);
   r = await call('POST', '/api/cards/next', {});
-  assert.deepEqual(r.data.codes, ['FC000004']);
+  assert.deepEqual(r.data.codes, ['CK000004']);
   // a printed number works as the card UID straight away
-  r = await call('POST', '/api/cards/issue', { uid: 'FC000004', card_no: 'FC000004', package_id: 1, method: 'cash' });
+  r = await call('POST', '/api/cards/issue', { uid: 'CK000004', card_no: 'CK000004', package_id: 1, method: 'cash' });
   assert.equal(r.status, 200);
   assert.equal(r.data.card.balance, 50);
   assert.equal(r.data.total_due, 50);

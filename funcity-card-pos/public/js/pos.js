@@ -214,7 +214,7 @@ async function charge() {
 
 function printReceipt({ title, card, lines, total, method, tx, extra = [] }) {
   const s = state.settings;
-  $('#receipt').innerHTML = `<h2>${esc(s.brand)}</h2>${s.receipt_header ? `<div class="c">${esc(s.receipt_header)}</div>` : ''}<hr>
+  $('#receipt').innerHTML = `<div class="c"><img src="/img/logo.png" alt="" style="width:46mm;height:auto;display:inline-block"></div><h2>${esc(s.brand)}</h2>${s.receipt_header ? `<div class="c">${esc(s.receipt_header)}</div>` : ''}<hr>
     <div class="c"><b>${esc(title)}</b></div><div>${new Date(tx.ts).toLocaleString()}</div><div>Receipt #${tx.id}${tx.staff ? ` · ${esc(tx.staff)}` : ''}</div><hr>
     <div class="ln"><span>Card</span><span>${esc(card.card_no || '')} ${esc(card.uid)}</span></div>${card.holder_name ? `<div class="ln"><span>Name</span><span>${esc(card.holder_name)}</span></div>` : ''}<hr>
     ${lines.map(([l, v]) => `<div class="ln"><span>${esc(l)}</span><span>${money(v)}</span></div>`).join('')}
