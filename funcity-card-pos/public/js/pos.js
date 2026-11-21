@@ -2,12 +2,13 @@
 import { $, $$, esc, api, setCurrency, money, dt, dtFull, mmss, toast, beep, modal, askPin } from './common.js';
 import { attachScanner } from './scan.js';
 
-const state = { settings: {}, machines: [], packages: [], shift: null, uid: null, card: null, history: [], cart: null, pin: null, range: 'today' };
+const state = { user: null, login_required: false, users: [], settings: {}, machines: [], packages: [], shift: null, uid: null, card: null, history: [], cart: null, pin: null, range: 'today' };
 
 // ---------- boot ----------
 async function boot() {
   const b = await api('GET', '/api/bootstrap');
-  Object.assign(state, { settings: b.settings, machines: b.machines, packages: b.packages, shift: b.shift });
+  Object.assign(state, { user: b.user, login_required: b.login_required, settings: b.settings, machines: b.machines, packages: b.packages, shift: b.shift });
+  $('#userName').textContent = b.user ? `${b.user.username} (${b.user.role})` : 'no login set';
   setCurrency(state.settings.currency);
   $('#brandName').textContent = state.settings.brand;
   document.title = `${state.settings.brand} · Card Counter POS`;
@@ -44,6 +45,7 @@ function openShiftModal() {
     <div class="field"><label>Opening cash in drawer</label><input id="shCash" type="number" step="0.01" value="0"></div>
     <div class="row end"><button class="btn ghost" data-close>Cancel</button><button class="btn primary" id="shOk">Open shift</button></div>`,
     { onOpen: (el, close) => {
+      if (state.user) $('#shStaff', el).value = state.user.username;
       $('#shStaff', el).focus();
       $('#shOk', el).onclick = async () => {
         try { state.shift = await api('POST', '/api/shifts/open', { staff: $('#shStaff', el).value, opening_cash: $('#shCash', el).value }); renderShift(); close(); toast('Shift opened', 'ok'); }
@@ -361,7 +363,51 @@ function renderSetup() {
   $$('#pkgTable [data-pkg]').forEach(b => b.onclick = () => packageModal(state.packages.find(p => p.id === Number(b.dataset.pkg))));
   $('#machTable tbody').innerHTML = state.machines.map(m => `<tr class="${m.active ? '' : 'muted'}"><td><b>${esc(m.code)}</b></td><td>${esc(m.name)}<div class="muted small">${esc(m.note || '')}</div></td><td>${esc(m.zone || '')}</td><td>${m.mode}</td><td class="num">${m.price_1 ?? ''}</td><td class="num">${m.price_2 ?? ''}</td><td class="num">${m.price_3 ?? ''}</td><td class="num">${m.price_game ?? ''}</td><td>${m.active ? '✓' : '—'}</td><td><a class="small" href="/station?machine=${encodeURIComponent(m.code)}" target="_blank">/station?machine=${esc(m.code)}</a></td><td><button class="btn sm" data-mach="${m.id}">Edit</button></td></tr>`).join('');
   $$('#machTable [data-mach]').forEach(b => b.onclick = () => machineModal(state.machines.find(m => m.id === Number(b.dataset.mach))));
+  renderUsers();
 }
+async function renderUsers() {
+  const isAdmin = state.user?.role === 'admin';
+  $('#addUser').classList.toggle('hidden', !isAdmin);
+  $('#myPassword').classList.toggle('hidden', !state.user);
+  if (!state.login_required) {
+    $('#usersTable tbody').innerHTML = '<tr><td colspan="5" class="muted">No login is set up. On a public server set the POS_PASSWORD variable: that creates the <b>admin</b> user, then add staff here.</td></tr>';
+    return;
+  }
+  if (!isAdmin) { $('#usersTable tbody').innerHTML = `<tr><td colspan="5" class="muted">Logged in as <b>${esc(state.user.username)}</b> (staff). Only admin can manage users.</td></tr>`; return; }
+  try { state.users = await api('GET', '/api/users'); } catch (e) { toast(e.message, 'error'); return; }
+  $('#usersTable tbody').innerHTML = state.users.map(u => `<tr class="${u.active ? '' : 'muted'}"><td><b>${esc(u.username)}</b></td><td>${u.role}</td><td>${u.active ? '✓' : '—'}</td><td class="small muted">${dt(u.last_login_at)}</td>
+    <td class="row"><button class="btn sm" data-upw="${u.id}">Set password</button><button class="btn sm ${u.active ? 'danger' : 'green'}" data-uact="${u.id}" data-to="${u.active ? 0 : 1}">${u.active ? 'Disable' : 'Enable'}</button></td></tr>`).join('');
+  $$('#usersTable [data-upw]').forEach(b => b.onclick = () => passwordModal(state.users.find(u => u.id === Number(b.dataset.upw))));
+  $$('#usersTable [data-uact]').forEach(b => b.onclick = () => withPin(async pin => { await api('POST', `/api/users/${b.dataset.uact}/active`, { active: b.dataset.to === '1' }, pin); toast('Saved', 'ok'); renderUsers(); }));
+}
+$('#addUser').addEventListener('click', () => {
+  modal(`<h3>Add user</h3><div class="fields">
+    <div class="field"><label>User name (what they type to log in)</label><input id="uName" type="text" placeholder="e.g. priya or station" autocomplete="off"></div>
+    <div class="field"><label>Role</label><select id="uRole"><option value="staff">Staff: sell, top-up, stations</option><option value="admin">Admin: also manage users</option></select></div>
+    <div class="field"><label>Password</label><input id="uPw" type="text" autocomplete="off"></div></div>
+    <p class="muted small">Give the user name and password to the staff member. They enter them in the browser's login box when they open the POS link.</p>
+    <div class="row end"><button class="btn ghost" data-close>Cancel</button><button class="btn primary" id="uOk">Create</button></div>`,
+    { onOpen: (el, close) => { $('#uName', el).focus(); $('#uOk', el).onclick = () => withPin(async pin => {
+      await api('POST', '/api/users', { username: $('#uName', el).value, role: $('#uRole', el).value, password: $('#uPw', el).value }, pin);
+      close(); toast('User created', 'ok'); renderUsers();
+    }); } });
+});
+function passwordModal(u) {
+  modal(`<h3>Set password for ${esc(u.username)}</h3><div class="field"><label>New password</label><input id="uPw" type="text" autocomplete="off"></div>
+    <div class="row end"><button class="btn ghost" data-close>Cancel</button><button class="btn primary" id="uOk">Save</button></div>`,
+    { onOpen: (el, close) => { $('#uPw', el).focus(); $('#uOk', el).onclick = () => withPin(async pin => {
+      await api('POST', `/api/users/${u.id}/password`, { password: $('#uPw', el).value }, pin); close(); toast('Password changed. They log in again with the new one.', 'ok', 6000);
+    }); } });
+}
+$('#myPassword').addEventListener('click', () => {
+  modal(`<h3>Change my password · ${esc(state.user?.username || '')}</h3>
+    <div class="field"><label>Current password</label><input id="pOld" type="password"></div><div class="field"><label>New password</label><input id="pNew" type="password"></div>
+    <div class="row end"><button class="btn ghost" data-close>Cancel</button><button class="btn primary" id="pOk">Change</button></div>`,
+    { onOpen: (el, close) => { $('#pOld', el).focus(); $('#pOk', el).onclick = async () => {
+      try { await api('POST', '/api/me/password', { old_password: $('#pOld', el).value, new_password: $('#pNew', el).value }); close(); toast('Password changed. The browser will ask you to log in again.', 'ok', 6000); }
+      catch (e) { toast(e.message, 'error'); }
+    }; } });
+});
 $('#settingsForm').addEventListener('submit', e => {
   e.preventDefault();
   const patch = {}; for (const el of e.target.elements) if (el.name && (el.name !== 'admin_pin' || el.value)) patch[el.name] = el.value;

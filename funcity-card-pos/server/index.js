@@ -12,7 +12,8 @@ const PUBLIC = join(__dirname, '..', 'public');
 // Database file: FUNCITY_DB wins; on Railway a mounted Volume is used automatically so data survives redeploys.
 const DB_PATH = process.env.FUNCITY_DB
   || (process.env.RAILWAY_VOLUME_MOUNT_PATH ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'funcity.db') : join(__dirname, '..', 'data', 'funcity.db'));
-// Optional password for the whole POS (set POS_PASSWORD when the server is reachable from the internet).
+// POS_PASSWORD (env) creates / resets the 'admin' login. Login is required whenever at least one user exists;
+// more staff users are added in Setup → Users.
 const POS_PASSWORD = process.env.POS_PASSWORD || '';
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -22,6 +23,7 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
 
 export function createApp(dbPath = DB_PATH) {
   const db = openDb(dbPath);
+  if (POS_PASSWORD) api.ensureAdmin(db, POS_PASSWORD);
   const timers = new Map(); // play id -> timeout for the stop webhook
 
   // --- optional relay webhooks (smart plug / ESP relay on each ride) ---
@@ -53,14 +55,21 @@ export function createApp(dbPath = DB_PATH) {
     req.on('error', reject);
   });
   const needPin = req => api.checkPin(db, req.headers['x-admin-pin']);
+  const needAdmin = req => { if (!req.user || req.user.role !== 'admin') throw new api.ApiError(403, 'Admin login required.'); };
 
   // --- routes: [method, regex, handler(req, params, query, body)] ---
   const routes = [
-    ['GET', /^\/api\/bootstrap$/, () => ({ settings: api.publicSettings(db), machines: api.listMachines(db), packages: api.listPackages(db),
+    ['GET', /^\/api\/bootstrap$/, (req) => ({ user: req.user ?? null, login_required: api.loginRequired(db), settings: api.publicSettings(db), machines: api.listMachines(db), packages: api.listPackages(db),
       shift: api.currentShift(db), server_time: new Date().toISOString() })],
     ['GET', /^\/api\/settings$/, () => api.publicSettings(db)],
     ['PUT', /^\/api\/settings$/, (req, p, q, b) => { needPin(req); return api.updateSettings(db, b); }],
     ['POST', /^\/api\/pin\/check$/, (req, p, q, b) => { api.checkPin(db, b.pin); return { ok: true }; }],
+
+    ['GET', /^\/api\/users$/, (req) => { needAdmin(req); return api.listUsers(db); }],
+    ['POST', /^\/api\/users$/, (req, p, q, b) => { needAdmin(req); needPin(req); return api.createUser(db, b); }],
+    ['POST', /^\/api\/users\/(\d+)\/password$/, (req, p, q, b) => { needAdmin(req); needPin(req); return api.setUserPassword(db, p[0], b.password); }],
+    ['POST', /^\/api\/users\/(\d+)\/active$/, (req, p, q, b) => { needAdmin(req); needPin(req); return api.setUserActive(db, p[0], Boolean(b.active), req.user.id); }],
+    ['POST', /^\/api\/me\/password$/, (req, p, q, b) => { if (!req.user) throw new api.ApiError(401, 'Not logged in.'); return api.changeOwnPassword(db, req.user.id, b.old_password, b.new_password); }],
 
     ['GET', /^\/api\/shifts\/current$/, () => api.currentShift(db)],
     ['GET', /^\/api\/shifts$/, () => api.listShifts(db)],
@@ -126,11 +135,12 @@ export function createApp(dbPath = DB_PATH) {
   }
 
   function authorized(req) {
-    if (!POS_PASSWORD) return true;
+    if (!api.loginRequired(db)) return true;              // no users yet: open (local LAN mode)
     const h = req.headers.authorization || '';
     if (!h.startsWith('Basic ')) return false;
-    const [, pass = ''] = Buffer.from(h.slice(6), 'base64').toString('utf8').split(/:(.*)/s);
-    return pass === POS_PASSWORD;
+    const [user = '', pass = ''] = Buffer.from(h.slice(6), 'base64').toString('utf8').split(/:(.*)/s);
+    req.user = api.authenticate(db, user, pass);
+    return Boolean(req.user);
   }
 
   const server = http.createServer(async (req, res) => {
@@ -146,6 +156,7 @@ export function createApp(dbPath = DB_PATH) {
         const m = url.pathname.match(re);
         if (!m) continue;
         const body = method === 'GET' ? {} : await readBody(req);
+        if (req.user && body && typeof body === 'object' && !body.staff) body.staff = req.user.username; // attribute sales to the login
         const out = await handler(req, m.slice(1).map(decodeURIComponent), url.searchParams, body, res);
         if (out !== undefined) json(res, 200, out);
         return;
@@ -168,6 +179,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     console.log(`  Counter POS : http://localhost:${PORT}/`);
     console.log(`  Station     : http://localhost:${PORT}/station?machine=C1  (replace C1 with the machine code)`);
     console.log(`  Database    : ${DB_PATH}`);
-    if (!POS_PASSWORD) console.log('  Password    : none (set POS_PASSWORD if this server is reachable from the internet)');
+    console.log(POS_PASSWORD ? "  Login       : user 'admin' + POS_PASSWORD; add staff in Setup → Users" : '  Login       : none (set POS_PASSWORD if this server is reachable from the internet)');
   });
 }

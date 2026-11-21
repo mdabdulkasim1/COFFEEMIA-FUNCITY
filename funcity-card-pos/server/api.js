@@ -1,6 +1,7 @@
 // Business rules for the Fun City RFID POS. Every function takes the open db and plain data,
 // and throws ApiError for anything the counter / station screen should show to staff.
 import { getSettings } from './db.js';
+import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
 
 export class ApiError extends Error {
   constructor(status, message, extra = {}) { super(message); this.status = status; this.extra = extra; }
@@ -453,4 +454,68 @@ export function toCsv(rows, companyCode) {
   const lines = [['company', ...cols].join(',')];
   for (const r of rows) lines.push([companyCode, ...cols.map(c => esc(r[c]))].join(','));
   return lines.join('\n') + '\n';
+}
+
+// ---------- users (login) ----------
+// Login is required as soon as at least one active user exists. POS_PASSWORD (env) creates / resets the 'admin' user.
+export function hashPassword(pw) {
+  const salt = randomBytes(16).toString('hex');
+  return `${salt}:${scryptSync(String(pw), salt, 32).toString('hex')}`;
+}
+export function verifyPassword(pw, stored) {
+  const [salt, hash] = String(stored || '').split(':');
+  if (!salt || !hash) return false;
+  const a = scryptSync(String(pw), salt, 32), b = Buffer.from(hash, 'hex');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+const normUser = u => String(u ?? '').trim().toLowerCase();
+function checkPassword(pw) { if (String(pw ?? '').length < 4) throw new ApiError(400, 'Password must be at least 4 characters.'); }
+
+export function loginRequired(db) {
+  return db.prepare('SELECT COUNT(*) AS n FROM users WHERE active=1').get().n > 0;
+}
+export function ensureAdmin(db, password) {
+  const u = db.prepare("SELECT * FROM users WHERE username='admin'").get();
+  if (u) db.prepare('UPDATE users SET password_hash=?, role=?, active=1 WHERE id=?').run(hashPassword(password), 'admin', u.id);
+  else db.prepare('INSERT INTO users(username,password_hash,role,created_at) VALUES (?,?,?,?)').run('admin', hashPassword(password), 'admin', now());
+}
+export function authenticate(db, username, password) {
+  const u = db.prepare('SELECT * FROM users WHERE username=? AND active=1').get(normUser(username));
+  if (!u || !verifyPassword(password, u.password_hash)) return null;
+  db.prepare('UPDATE users SET last_login_at=? WHERE id=?').run(now(), u.id);
+  return { id: u.id, username: u.username, role: u.role };
+}
+export function listUsers(db) {
+  return db.prepare('SELECT id, username, role, active, created_at, last_login_at FROM users ORDER BY role, username').all();
+}
+export function createUser(db, { username, password, role }) {
+  const name = normUser(username);
+  if (!/^[a-z0-9._-]{2,30}$/.test(name)) throw new ApiError(400, 'User name: 2–30 letters, numbers, dot, dash or underscore.');
+  checkPassword(password);
+  const r = role === 'admin' ? 'admin' : 'staff';
+  if (db.prepare('SELECT 1 FROM users WHERE username=?').get(name)) throw new ApiError(409, 'That user name already exists.');
+  const res = db.prepare('INSERT INTO users(username,password_hash,role,created_at) VALUES (?,?,?,?)').run(name, hashPassword(password), r, now());
+  return db.prepare('SELECT id, username, role, active, created_at FROM users WHERE id=?').get(res.lastInsertRowid);
+}
+export function setUserPassword(db, id, password) {
+  checkPassword(password);
+  const r = db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hashPassword(password), Number(id));
+  if (!r.changes) throw new ApiError(404, 'User not found.');
+  return { ok: true };
+}
+export function setUserActive(db, id, active, actingUserId) {
+  const u = db.prepare('SELECT * FROM users WHERE id=?').get(Number(id));
+  if (!u) throw new ApiError(404, 'User not found.');
+  if (!active) {
+    if (u.id === actingUserId) throw new ApiError(400, 'You cannot disable your own account.');
+    const admins = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role='admin' AND active=1 AND id<>?").get(u.id).n;
+    if (u.role === 'admin' && admins === 0) throw new ApiError(400, 'Keep at least one active admin.');
+  }
+  db.prepare('UPDATE users SET active=? WHERE id=?').run(active ? 1 : 0, u.id);
+  return db.prepare('SELECT id, username, role, active FROM users WHERE id=?').get(u.id);
+}
+export function changeOwnPassword(db, userId, oldPw, newPw) {
+  const u = db.prepare('SELECT * FROM users WHERE id=?').get(userId);
+  if (!u || !verifyPassword(oldPw, u.password_hash)) throw new ApiError(403, 'Current password is wrong.');
+  return setUserPassword(db, userId, newPw);
 }

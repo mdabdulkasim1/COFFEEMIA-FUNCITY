@@ -141,6 +141,15 @@ function migrate(db) {
     status TEXT NOT NULL DEFAULT 'running'  -- running | done | stopped
   );
   CREATE INDEX IF NOT EXISTS ix_plays_machine ON plays(machine_id, status);
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'staff',          -- admin | staff
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    last_login_at TEXT
+  );
   `);
 }
 

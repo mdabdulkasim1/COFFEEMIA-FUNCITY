@@ -19,6 +19,7 @@
   </nav>
   <div class="spacer"></div>
   <div class="shiftpill" id="shiftPill"><span class="st"></span><span id="shiftText">No shift open</span><button class="btn sm yellow" id="shiftBtn">Open shift</button></div>
+  <div class="shiftpill" id="userPill" title="Logged in as"><span>👤</span><span id="userName">no login</span></div>
   <div class="clock" id="clock"></div>
 </header>
 
@@ -123,6 +124,11 @@
           <p class="muted small">₹1 = 1 point by default (set "Price of 1 point" above). Customers buy points in packages at the counter. Use <b>bonus</b> for offers such as 75 points for ₹50.</p>
           <div class="scroll"><table id="pkgTable"><thead><tr><th>Name</th><th class="num">Points</th><th class="num">Bonus</th><th class="num">Price</th><th>Active</th><th></th></tr></thead><tbody></tbody></table></div>
         </div>
+      </div>
+      <div class="card" id="usersCard">
+        <div class="row between"><h2>Users &amp; logins</h2><div class="row"><button class="btn sm ghost" id="myPassword">Change my password</button><button class="btn sm" id="addUser">+ Add user</button></div></div>
+        <p class="muted small" id="usersHelp">Each staff member logs in with their own user name. Sales and shifts are recorded under that name. <b>admin</b> can manage users; <b>staff</b> can sell. Station tablets can share one staff login (e.g. <i>station</i>).</p>
+        <div class="scroll"><table id="usersTable"><thead><tr><th>User name</th><th>Role</th><th>Active</th><th>Last login</th><th></th></tr></thead><tbody></tbody></table></div>
       </div>
       <div class="card">
         <div class="row between"><h2>Machines &amp; point prices</h2><button class="btn sm" id="addMachine">+ Add machine</button></div>

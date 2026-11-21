@@ -65,8 +65,11 @@ Give the PC a fixed LAN address on the router so the station screens always find
 The repo root has a `package.json`, `.node-version` and `railway.json`, so Railway builds it with no root-directory
 setting. After connecting the GitHub repo:
 
-1. **Variables** → add `POS_PASSWORD` = a strong password. Every screen (counter and stations) will ask for it
-   once; the username can be anything. Without it, anyone with the URL could issue cards.
+1. **Variables** → add `POS_PASSWORD` = a strong password. This creates the **admin** login (user name `admin`).
+   Then open the POS, log in as admin, go to **Setup → Users & logins** and add a user for each staff member
+   and one shared `station` user for the tablets. Sales and shifts are recorded under the login name.
+   Changing `POS_PASSWORD` and redeploying resets the admin password if it is forgotten.
+   Without a password, anyone with the URL could issue cards.
 2. **Volume** → add a volume (any mount path, e.g. `/data`). The database is created there automatically, so
    cards and sales survive redeploys. Without a volume all data is lost on every deploy.
 3. **Settings → Networking → Generate Domain** to get the public URL. Use it as `<pos-pc>` in the station URLs.
@@ -145,7 +148,8 @@ points are **used** (PLAY rows). The liability tile is what is still owed to car
 | Refund unused points on return | Yes = pay back points × price; No = forfeited |
 | Max minutes per turn | 3 by default ("max 3 min per turn when there is a queue") |
 | Station: seconds to pick minutes | How long the station waits after a scan before returning to idle |
-| Admin PIN | Protects Setup, adjustments, unblock, returns / refunds and stopping a play |
+| Admin PIN | Protects Setup, adjustments, unblock, returns / refunds, user management and stopping a play |
+| Users & logins | Browser login per staff member (admin or staff role). Appears once `POS_PASSWORD` has created the admin user |
 
 ## Developer notes
 

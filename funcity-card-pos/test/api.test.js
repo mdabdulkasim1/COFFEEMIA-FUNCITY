@@ -198,21 +198,43 @@ test('Code 128 encoder: valid structure and checksum', async () => {
   assert.throws(() => code128Values('bad\u00e9'));
 });
 
-test('POS_PASSWORD protects every route with Basic auth', async () => {
+test('POS_PASSWORD creates the admin login; staff users can be added by admin', async () => {
   process.env.POS_PASSWORD = 'secret9';
   const { createApp } = await import('../server/index.js?pw=' + Date.now());
   const a = createApp(':memory:');
   await new Promise(r => a.server.listen(0, '127.0.0.1', r));
   const b = `http://127.0.0.1:${a.server.address().port}`;
+  const basic = (u, p) => ({ authorization: 'Basic ' + Buffer.from(`${u}:${p}`).toString('base64') });
+  const j = async (method, path, body, headers) => { const r = await fetch(b + path, { method, headers: { 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, data: await r.json().catch(() => ({})) }; };
   try {
-    let res = await fetch(b + '/api/bootstrap');
-    assert.equal(res.status, 401);
-    assert.match(res.headers.get('www-authenticate') || '', /Basic/);
-    res = await fetch(b + '/');
-    assert.equal(res.status, 401);
-    res = await fetch(b + '/api/bootstrap', { headers: { authorization: 'Basic ' + Buffer.from('staff:secret9').toString('base64') } });
-    assert.equal(res.status, 200);
-    res = await fetch(b + '/api/bootstrap', { headers: { authorization: 'Basic ' + Buffer.from('staff:wrong').toString('base64') } });
-    assert.equal(res.status, 401);
+    let r = await fetch(b + '/api/bootstrap');
+    assert.equal(r.status, 401);
+    assert.match(r.headers.get('www-authenticate') || '', /Basic/);
+    r = await fetch(b + '/', { headers: basic('admin', 'wrong') });
+    assert.equal(r.status, 401);
+    r = await fetch(b + '/api/bootstrap', { headers: basic('anyone', 'secret9') });
+    assert.equal(r.status, 401, 'username must match a user');
+    let x = await j('GET', '/api/bootstrap', null, basic('ADMIN', 'secret9'));
+    assert.equal(x.status, 200);
+    assert.equal(x.data.user.username, 'admin'); assert.equal(x.data.user.role, 'admin'); assert.equal(x.data.login_required, true);
+
+    x = await j('POST', '/api/users', { username: 'Priya', password: 'pr1234', role: 'staff' }, basic('admin', 'secret9'));
+    assert.equal(x.status, 403, 'PIN required');
+    x = await j('POST', '/api/users', { username: 'Priya', password: 'pr1234', role: 'staff' }, { ...basic('admin', 'secret9'), 'x-admin-pin': '1234' });
+    assert.equal(x.status, 200); assert.equal(x.data.username, 'priya');
+    x = await j('POST', '/api/users', { username: 'priya', password: 'zz9999' }, { ...basic('admin', 'secret9'), 'x-admin-pin': '1234' });
+    assert.equal(x.status, 409);
+
+    x = await j('POST', '/api/cards/issue', { uid: 'CK000777', package_id: 1, method: 'cash' }, basic('priya', 'pr1234'));
+    assert.equal(x.status, 200); assert.equal(x.data.transaction.staff, 'priya');
+    x = await j('GET', '/api/users', null, basic('priya', 'pr1234'));
+    assert.equal(x.status, 403);
+    x = await j('POST', '/api/me/password', { old_password: 'pr1234', new_password: 'new5678' }, basic('priya', 'pr1234'));
+    assert.equal(x.status, 200);
+    r = await fetch(b + '/api/bootstrap', { headers: basic('priya', 'pr1234') }); assert.equal(r.status, 401);
+    r = await fetch(b + '/api/bootstrap', { headers: basic('priya', 'new5678') }); assert.equal(r.status, 200);
+    const admin = (await j('GET', '/api/users', null, basic('admin', 'secret9'))).data.find(u => u.username === 'admin');
+    x = await j('POST', `/api/users/${admin.id}/active`, { active: false }, { ...basic('admin', 'secret9'), 'x-admin-pin': '1234' });
+    assert.equal(x.status, 400);
   } finally { a.close(); delete process.env.POS_PASSWORD; }
 });
