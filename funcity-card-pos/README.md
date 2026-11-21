@@ -60,6 +60,19 @@ npm start
 To start automatically on boot, create a scheduled task / autostart entry that runs `npm start` in the folder.
 Give the PC a fixed LAN address on the router so the station screens always find it.
 
+## Running it on Railway (internet) instead of a counter PC
+
+The repo root has a `package.json`, `.node-version` and `railway.json`, so Railway builds it with no root-directory
+setting. After connecting the GitHub repo:
+
+1. **Variables** → add `POS_PASSWORD` = a strong password. Every screen (counter and stations) will ask for it
+   once; the username can be anything. Without it, anyone with the URL could issue cards.
+2. **Volume** → add a volume (any mount path, e.g. `/data`). The database is created there automatically, so
+   cards and sales survive redeploys. Without a volume all data is lost on every deploy.
+3. **Settings → Networking → Generate Domain** to get the public URL. Use it as `<pos-pc>` in the station URLs.
+
+The counter PC and the station tablets then just open that URL. Scanners still plug into the local devices.
+
 ## Scanner setup
 
 A USB barcode scanner works as a **keyboard**: it types the code and presses Enter. No driver needed.

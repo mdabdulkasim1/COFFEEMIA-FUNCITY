@@ -1,0 +1,10 @@
+{
+  "name": "coffeemia-funcity",
+  "private": true,
+  "description": "Coffeemia / Fun City group software. The deployable app is in funcity-card-pos/.",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning funcity-card-pos/server/index.js",
+    "test": "npm --prefix funcity-card-pos test"
+  }
+}

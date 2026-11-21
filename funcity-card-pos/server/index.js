@@ -9,7 +9,11 @@ import * as api from './api.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(__dirname, '..', 'public');
-const DB_PATH = process.env.FUNCITY_DB || join(__dirname, '..', 'data', 'funcity.db');
+// Database file: FUNCITY_DB wins; on Railway a mounted Volume is used automatically so data survives redeploys.
+const DB_PATH = process.env.FUNCITY_DB
+  || (process.env.RAILWAY_VOLUME_MOUNT_PATH ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'funcity.db') : join(__dirname, '..', 'data', 'funcity.db'));
+// Optional password for the whole POS (set POS_PASSWORD when the server is reachable from the internet).
+const POS_PASSWORD = process.env.POS_PASSWORD || '';
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '0.0.0.0';
 
@@ -121,8 +125,20 @@ export function createApp(dbPath = DB_PATH) {
     }
   }
 
+  function authorized(req) {
+    if (!POS_PASSWORD) return true;
+    const h = req.headers.authorization || '';
+    if (!h.startsWith('Basic ')) return false;
+    const [, pass = ''] = Buffer.from(h.slice(6), 'base64').toString('utf8').split(/:(.*)/s);
+    return pass === POS_PASSWORD;
+  }
+
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
+    if (!authorized(req)) {
+      res.writeHead(401, { 'www-authenticate': 'Basic realm="Play Zone POS", charset="UTF-8"', 'content-type': 'text/plain' });
+      return res.end('Password required');
+    }
     if (!url.pathname.startsWith('/api/')) return serveStatic(req, res, url.pathname);
     try {
       for (const [method, re, handler] of routes) {
@@ -152,5 +168,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     console.log(`  Counter POS : http://localhost:${PORT}/`);
     console.log(`  Station     : http://localhost:${PORT}/station?machine=C1  (replace C1 with the machine code)`);
     console.log(`  Database    : ${DB_PATH}`);
+    if (!POS_PASSWORD) console.log('  Password    : none (set POS_PASSWORD if this server is reachable from the internet)');
   });
 }

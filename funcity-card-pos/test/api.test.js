@@ -197,3 +197,22 @@ test('Code 128 encoder: valid structure and checksum', async () => {
   assert.ok(code128Svg('FC000123').includes('<svg'));
   assert.throws(() => code128Values('bad\u00e9'));
 });
+
+test('POS_PASSWORD protects every route with Basic auth', async () => {
+  process.env.POS_PASSWORD = 'secret9';
+  const { createApp } = await import('../server/index.js?pw=' + Date.now());
+  const a = createApp(':memory:');
+  await new Promise(r => a.server.listen(0, '127.0.0.1', r));
+  const b = `http://127.0.0.1:${a.server.address().port}`;
+  try {
+    let res = await fetch(b + '/api/bootstrap');
+    assert.equal(res.status, 401);
+    assert.match(res.headers.get('www-authenticate') || '', /Basic/);
+    res = await fetch(b + '/');
+    assert.equal(res.status, 401);
+    res = await fetch(b + '/api/bootstrap', { headers: { authorization: 'Basic ' + Buffer.from('staff:secret9').toString('base64') } });
+    assert.equal(res.status, 200);
+    res = await fetch(b + '/api/bootstrap', { headers: { authorization: 'Basic ' + Buffer.from('staff:wrong').toString('base64') } });
+    assert.equal(res.status, 401);
+  } finally { a.close(); delete process.env.POS_PASSWORD; }
+});
